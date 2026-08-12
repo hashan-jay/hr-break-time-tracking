@@ -1,0 +1,27 @@
+# Visual Studio / .NET
+.vs/
+bin/
+obj/
+
+# User-specific files
+*.user
+*.suo
+
+# Node
+node_modules/
+
+# Frontend build
+dist/
+build/
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db

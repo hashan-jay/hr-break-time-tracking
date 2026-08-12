@@ -1,0 +1,38 @@
+:root {
+  --bg: #f3f0e8;
+  --bg-accent: #e7efe8;
+  --ink: #1c2a24;
+  --muted: #5d6b64;
+  --panel: rgba(255, 252, 246, 0.92);
+  --line: #d5ddd6;
+  --teal: #0f6b5c;
+  --teal-dark: #0a4f44;
+  --amber: #b7791f;
+  --green: #1f7a45;
+  --blue: #1d4f91;
+  --red: #b42318;
+  --shadow: 0 18px 40px rgba(28, 42, 36, 0.08);
+  font-family: "Segoe UI", "Trebuchet MS", sans-serif;
+  color: var(--ink);
+  background:
+    radial-gradient(circle at top left, #dceee4 0%, transparent 40%),
+    radial-gradient(circle at top right, #f2e4c9 0%, transparent 35%),
+    linear-gradient(160deg, var(--bg), var(--bg-accent));
+  line-height: 1.45;
+  font-weight: 400;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+* { box-sizing: border-box; }
+html, body, #root { min-height: 100%; margin: 0; }
+body { min-width: 320px; }
+a { color: inherit; text-decoration: none; }
+button, input, select, textarea { font: inherit; }
+code, kbd {
+  font-family: ui-monospace, Consolas, monospace;
+  background: #e8efe9;
+  padding: 0.1rem 0.35rem;
+  border-radius: 4px;
+}

@@ -1,0 +1,190 @@
+using HRTimeTracking.Api.Data;
+using HRTimeTracking.Api.DTOs;
+using HRTimeTracking.Api.Models;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
+
+namespace HRTimeTracking.Api.Services;
+
+public interface IUserAdminService
+{
+    Task<IReadOnlyList<UserDto>> GetAllAsync();
+    Task<(bool Ok, string? Error, UserDto? Data)> CreateAsync(CreateUserRequest request, string? actorUserId);
+    Task<(bool Ok, string? Error, UserDto? Data)> UpdateAsync(string id, UpdateUserRequest request, string? actorUserId);
+    Task<(bool Ok, string? Error)> ChangePasswordAsync(string id, string newPassword, string? actorUserId);
+    Task<(bool Ok, string? Error)> DeactivateAsync(string id, string? actorUserId);
+}
+
+public class UserAdminService : IUserAdminService
+{
+    private readonly UserManager<ApplicationUser> _userManager;
+    private readonly RoleManager<IdentityRole> _roleManager;
+    private readonly IAuditService _audit;
+
+    public UserAdminService(
+        UserManager<ApplicationUser> userManager,
+        RoleManager<IdentityRole> roleManager,
+        IAuditService audit)
+    {
+        _userManager = userManager;
+        _roleManager = roleManager;
+        _audit = audit;
+    }
+
+    public async Task<IReadOnlyList<UserDto>> GetAllAsync()
+    {
+        var users = await _userManager.Users.OrderBy(u => u.UserName).ToListAsync();
+        var result = new List<UserDto>();
+        foreach (var user in users)
+        {
+            var roles = await _userManager.GetRolesAsync(user);
+            result.Add(Map(user, roles));
+        }
+        return result;
+    }
+
+    public async Task<(bool Ok, string? Error, UserDto? Data)> CreateAsync(CreateUserRequest request, string? actorUserId)
+    {
+        if (!AppRoles.All.Contains(request.Role))
+            return (false, "Invalid role.", null);
+
+        if (!await _roleManager.RoleExistsAsync(request.Role))
+            return (false, "Role is not configured.", null);
+
+        var user = new ApplicationUser
+        {
+            UserName = request.UserName.Trim(),
+            Email = request.Email.Trim(),
+            FullName = request.FullName.Trim(),
+            EmailConfirmed = true,
+            IsActive = true,
+            CreatedAt = DateTime.UtcNow
+        };
+
+        var create = await _userManager.CreateAsync(user, request.Password);
+        if (!create.Succeeded)
+            return (false, string.Join(" ", create.Errors.Select(e => e.Description)), null);
+
+        var roleResult = await _userManager.AddToRoleAsync(user, request.Role);
+        if (!roleResult.Succeeded)
+            return (false, string.Join(" ", roleResult.Errors.Select(e => e.Description)), null);
+
+        await _audit.LogAsync(actorUserId, "Create", "User", user.Id, $"Created user '{user.UserName}' with role {request.Role}.");
+        var roles = await _userManager.GetRolesAsync(user);
+        return (true, null, Map(user, roles));
+    }
+
+    public async Task<(bool Ok, string? Error, UserDto? Data)> UpdateAsync(string id, UpdateUserRequest request, string? actorUserId)
+    {
+        if (!AppRoles.All.Contains(request.Role))
+            return (false, "Invalid role.", null);
+
+        var user = await _userManager.FindByIdAsync(id);
+        if (user is null) return (false, "User not found.", null);
+
+        user.FullName = request.FullName.Trim();
+        user.Email = request.Email.Trim();
+        user.IsActive = request.IsActive;
+        var update = await _userManager.UpdateAsync(user);
+        if (!update.Succeeded)
+            return (false, string.Join(" ", update.Errors.Select(e => e.Description)), null);
+
+        var currentRoles = await _userManager.GetRolesAsync(user);
+        await _userManager.RemoveFromRolesAsync(user, currentRoles);
+        await _userManager.AddToRoleAsync(user, request.Role);
+
+        await _audit.LogAsync(actorUserId, "Update", "User", user.Id, $"Updated user '{user.UserName}'.");
+        var roles = await _userManager.GetRolesAsync(user);
+        return (true, null, Map(user, roles));
+    }
+
+    public async Task<(bool Ok, string? Error)> ChangePasswordAsync(string id, string newPassword, string? actorUserId)
+    {
+        var user = await _userManager.FindByIdAsync(id);
+        if (user is null) return (false, "User not found.");
+
+        var token = await _userManager.GeneratePasswordResetTokenAsync(user);
+        var result = await _userManager.ResetPasswordAsync(user, token, newPassword);
+        if (!result.Succeeded)
+            return (false, string.Join(" ", result.Errors.Select(e => e.Description)));
+
+        await _audit.LogAsync(actorUserId, "ChangePassword", "User", user.Id, $"Password changed for '{user.UserName}'.");
+        return (true, null);
+    }
+
+    public async Task<(bool Ok, string? Error)> DeactivateAsync(string id, string? actorUserId)
+    {
+        var user = await _userManager.FindByIdAsync(id);
+        if (user is null) return (false, "User not found.");
+        if (user.Id == actorUserId) return (false, "You cannot deactivate your own account.");
+
+        user.IsActive = false;
+        await _userManager.UpdateAsync(user);
+        await _audit.LogAsync(actorUserId, "Deactivate", "User", user.Id, $"Deactivated user '{user.UserName}'.");
+        return (true, null);
+    }
+
+    private static UserDto Map(ApplicationUser user, IList<string> roles) => new(
+        user.Id,
+        user.UserName ?? string.Empty,
+        user.Email ?? string.Empty,
+        user.FullName,
+        roles.ToList(),
+        user.IsActive,
+        user.CreatedAt,
+        user.LastLoginAt);
+}
+
+public interface ISettingsService
+{
+    Task<IReadOnlyList<SystemSettingDto>> GetAllAsync();
+    Task<(bool Ok, string? Error, SystemSettingDto? Data)> UpdateAsync(string key, string value, string? userId);
+    Task<int> GetDailyLimitMinutesAsync();
+}
+
+public class SettingsService : ISettingsService
+{
+    public const string DailyLimitKey = "DailyBreakLimitMinutes";
+
+    private readonly AppDbContext _db;
+    private readonly IAuditService _audit;
+
+    public SettingsService(AppDbContext db, IAuditService audit)
+    {
+        _db = db;
+        _audit = audit;
+    }
+
+    public async Task<IReadOnlyList<SystemSettingDto>> GetAllAsync()
+    {
+        return await _db.SystemSettings.AsNoTracking()
+            .OrderBy(s => s.Key)
+            .Select(s => new SystemSettingDto(s.Id, s.Key, s.Value, s.Description))
+            .ToListAsync();
+    }
+
+    public async Task<(bool Ok, string? Error, SystemSettingDto? Data)> UpdateAsync(string key, string value, string? userId)
+    {
+        var setting = await _db.SystemSettings.FirstOrDefaultAsync(s => s.Key == key);
+        if (setting is null) return (false, "Setting not found.", null);
+
+        if (key == DailyLimitKey && (!int.TryParse(value, out var minutes) || minutes < 1 || minutes > 240))
+            return (false, "Daily break limit must be between 1 and 240 minutes.", null);
+
+        setting.Value = value.Trim();
+        await _db.SaveChangesAsync();
+        await _audit.LogAsync(userId, "Update", "SystemSetting", setting.Id.ToString(), $"Updated setting '{key}' to '{value}'.");
+
+        return (true, null, new SystemSettingDto(setting.Id, setting.Key, setting.Value, setting.Description));
+    }
+
+    public async Task<int> GetDailyLimitMinutesAsync()
+    {
+        var value = await _db.SystemSettings.AsNoTracking()
+            .Where(s => s.Key == DailyLimitKey)
+            .Select(s => s.Value)
+            .FirstOrDefaultAsync();
+
+        return int.TryParse(value, out var minutes) ? minutes : BreakStatusCodes.DefaultDailyLimitMinutes;
+    }
+}
