@@ -167,4 +167,26 @@ public record AuditLogDto(
     DateTime CreatedAt,
     string? IpAddress);
 
+public record AuditReportRowDto(
+    long Id,
+    string? UserId,
+    string? UserName,
+    string Action,
+    string EntityType,
+    string? EntityId,
+    string? Details,
+    DateTime CreatedAt,
+    string? IpAddress);
+
+public record AuditActionCountDto(string Action, int Count);
+
+public record AuditReportDto(
+    DateOnly From,
+    DateOnly To,
+    int TotalEntries,
+    int DistinctUsers,
+    int DistinctActions,
+    IReadOnlyList<AuditActionCountDto> ActionCounts,
+    IReadOnlyList<AuditReportRowDto> Rows);
+
 public record ApiMessage(string Message);

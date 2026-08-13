@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../api/client';
 import { useAuth } from '../auth/AuthContext';
+import PortalClock from '../components/PortalClock';
 import { MessageBar, StatusBadge } from '../components/UiBits';
 
 function formatElapsed(seconds) {
@@ -187,13 +188,13 @@ export default function PortalPage() {
   };
 
   return (
-    <div className="portal-shell">
+    <div className="app-portal portal-shell">
       <aside className="portal-sidebar">
-        <div className="brand">
-          <div className="brand-mark">HR</div>
+        <div className="portal-brand">
+          <div className="portal-brand__mark">BT</div>
           <div>
-            <div className="brand-title">BreakTime</div>
-            <div className="brand-sub">Employee Portal</div>
+            <div className="portal-brand__title">Employee Portal</div>
+            <div className="portal-brand__sub">BreakTime</div>
           </div>
         </div>
 
@@ -246,6 +247,8 @@ export default function PortalPage() {
           )}
         </div>
 
+        <PortalClock />
+
         <div className="portal-help">
           <strong>How to use</strong>
           <ol>
@@ -257,16 +260,19 @@ export default function PortalPage() {
       </aside>
 
       <main className="portal-main">
-        <header className="page-header">
-          <div>
-            <h1>Employee Break Portal</h1>
-            <p>
-              No login needed. Select yourself and press Enter/Space to record out-time or in-time.
+        <header className="portal-employee-header">
+          <div className="portal-employee-header__text">
+            <p className="portal-eyebrow">Portal</p>
+            <div className="portal-employee-header__title-row">
+              <h1 className="portal-employee-title">Employee Break Portal</h1>
+              <div className="portal-onbreak-chip">
+                On break <strong>{board?.onBreakCount ?? 0}</strong>
+              </div>
+            </div>
+            <p className="portal-lead">
+              Select yourself and press Enter/Space to record out-time or in-time.
               Daily limit: {board?.dailyLimitMinutes ?? 20} minutes.
             </p>
-          </div>
-          <div className="header-stats">
-            <span>On break: {board?.onBreakCount ?? 0}</span>
           </div>
         </header>
 
@@ -278,59 +284,57 @@ export default function PortalPage() {
           </div>
         )}
 
-        <div className="toolbar">
-          <input
-            ref={searchRef}
-            className="search"
-            placeholder="Search by name or employee ID…  (/ to focus)"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </div>
-
-        <div className="tracking-layout portal-tracking">
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Code</th>
-                  <th>Employee</th>
-                  <th>Department</th>
-                  <th>Today</th>
-                  <th>Status</th>
-                  <th>State</th>
-                </tr>
-              </thead>
-              <tbody>
-                {employeesView.map((e) => (
-                  <tr
-                    key={e.employeeId}
-                    className={`${selectedId === e.employeeId ? 'selected' : ''} ${e.isOnBreak ? 'on-break' : ''}`}
-                    onClick={() => setSelectedId(e.employeeId)}
-                  >
-                    <td>{e.employeeCode}</td>
-                    <td>{e.fullName}</td>
-                    <td>{e.departmentName}</td>
-                    <td>
-                      <strong>{e.totalBreakDisplay}</strong>
-                      <div className="muted">{e.totalBreakSecondsToday ?? 0}s</div>
-                    </td>
-                    <td><StatusBadge status={e.status} color={e.statusColor} /></td>
-                    <td>
-                      {e.isOnBreak
-                        ? `On break (${formatElapsed(e.currentBreakElapsedSeconds)})`
-                        : 'In office'}
-                    </td>
+        <div className="portal-workbench">
+          <section className="portal-board">
+            <div className="portal-board__toolbar">
+              <input
+                ref={searchRef}
+                className="portal-board__search"
+                placeholder="Search by name or employee ID…  (/ to focus)"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </div>
+            <div className="portal-board__table">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Code</th>
+                    <th>Employee</th>
+                    <th>Department</th>
+                    <th>Today</th>
+                    <th>Status</th>
+                    <th>State</th>
                   </tr>
-                ))}
-                {apiOnline && !employeesView.length && (
-                  <tr><td colSpan={6} className="empty">No employees found.</td></tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {employeesView.map((e) => (
+                    <tr
+                      key={e.employeeId}
+                      className={`${selectedId === e.employeeId ? 'selected' : ''} ${e.isOnBreak ? 'on-break' : ''}`}
+                      onClick={() => setSelectedId(e.employeeId)}
+                    >
+                      <td className="col-code">{e.employeeCode}</td>
+                      <td className="col-name">{e.fullName}</td>
+                      <td>{e.departmentName}</td>
+                      <td className="col-today"><strong>{e.totalBreakDisplay}</strong></td>
+                      <td><StatusBadge status={e.status} color={e.statusColor} /></td>
+                      <td>
+                        {e.isOnBreak
+                          ? `On break (${formatElapsed(e.currentBreakElapsedSeconds)})`
+                          : 'In office'}
+                      </td>
+                    </tr>
+                  ))}
+                  {apiOnline && !employeesView.length && (
+                    <tr><td colSpan={6} className="empty">No employees found.</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </section>
 
-          <aside className="capture-panel">
+          <aside className="portal-capture">
             <h2>Record break</h2>
             {selected ? (
               <>

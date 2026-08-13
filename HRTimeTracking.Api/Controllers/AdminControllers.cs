@@ -97,12 +97,17 @@ public class AuditController : ControllerBase
     [HttpGet]
     public async Task<ActionResult<IReadOnlyList<AuditLogDto>>> Get(
         [FromQuery] int take = 100,
-        [FromQuery] string? entityType = null)
+        [FromQuery] string? entityType = null,
+        [FromQuery] string? from = null,
+        [FromQuery] string? to = null)
     {
         take = Math.Clamp(take, 1, 500);
         var query = _db.AuditLogs.AsNoTracking().AsQueryable();
         if (!string.IsNullOrWhiteSpace(entityType))
             query = query.Where(a => a.EntityType == entityType);
+
+        if (TryParseLocalDateRange(from, to, out var fromUtc, out var toUtcExclusive))
+            query = query.Where(a => a.CreatedAt >= fromUtc && a.CreatedAt < toUtcExclusive);
 
         var items = await query
             .OrderByDescending(a => a.CreatedAt)
@@ -110,6 +115,117 @@ public class AuditController : ControllerBase
             .Select(a => new AuditLogDto(a.Id, a.UserId, a.Action, a.EntityType, a.EntityId, a.Details, a.CreatedAt, a.IpAddress))
             .ToListAsync();
 
+        // Convert UTC-stored audit times to PC local for display.
+        items = items
+            .Select(a => a with { CreatedAt = TimeDisplay.FromStoredUtc(a.CreatedAt) })
+            .ToList();
+
         return Ok(items);
+    }
+
+    [HttpGet("report")]
+    public async Task<ActionResult<AuditReportDto>> Report(
+        [FromQuery] string? from = null,
+        [FromQuery] string? to = null)
+    {
+        var fromDate = DateOnly.TryParse(from, out var f) ? f : DateOnly.FromDateTime(DateTime.Now);
+        var toDate = DateOnly.TryParse(to, out var t) ? t : fromDate;
+        if (toDate < fromDate) (fromDate, toDate) = (toDate, fromDate);
+
+        var fromUtc = DateTime.SpecifyKind(fromDate.ToDateTime(TimeOnly.MinValue), DateTimeKind.Local).ToUniversalTime();
+        var toUtcExclusive = DateTime.SpecifyKind(toDate.AddDays(1).ToDateTime(TimeOnly.MinValue), DateTimeKind.Local).ToUniversalTime();
+
+        var logs = await _db.AuditLogs.AsNoTracking()
+            .Where(a => a.CreatedAt >= fromUtc && a.CreatedAt < toUtcExclusive)
+            .OrderByDescending(a => a.CreatedAt)
+            .ToListAsync();
+
+        var userIds = logs
+            .Select(a => a.UserId)
+            .Where(id => !string.IsNullOrWhiteSpace(id))
+            .Select(id => id!)
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+
+        var userNames = new Dictionary<string, string>(StringComparer.Ordinal);
+        if (userIds.Count > 0)
+        {
+            var users = await _db.Users.AsNoTracking()
+                .Where(u => userIds.Contains(u.Id))
+                .Select(u => new { u.Id, u.UserName, u.FullName })
+                .ToListAsync();
+
+            foreach (var user in users)
+            {
+                if (string.IsNullOrWhiteSpace(user.Id))
+                    continue;
+
+                var label = !string.IsNullOrWhiteSpace(user.UserName)
+                    ? user.UserName!
+                    : (!string.IsNullOrWhiteSpace(user.FullName) ? user.FullName : user.Id);
+                userNames[user.Id] = label;
+            }
+        }
+
+        var rows = new List<AuditReportRowDto>(logs.Count);
+        foreach (var entry in logs)
+        {
+            string? userName = null;
+            if (!string.IsNullOrWhiteSpace(entry.UserId))
+                userNames.TryGetValue(entry.UserId, out userName);
+
+            rows.Add(new AuditReportRowDto(
+                entry.Id,
+                entry.UserId,
+                userName,
+                entry.Action ?? string.Empty,
+                entry.EntityType ?? string.Empty,
+                entry.EntityId,
+                entry.Details,
+                TimeDisplay.FromStoredUtc(entry.CreatedAt),
+                entry.IpAddress));
+        }
+
+        var actionCounts = rows
+            .GroupBy(r => r.Action, StringComparer.OrdinalIgnoreCase)
+            .Select(g => new AuditActionCountDto(g.Key, g.Count()))
+            .OrderByDescending(x => x.Count)
+            .ThenBy(x => x.Action, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        var distinctUsers = rows
+            .Select(r => r.UserId)
+            .Where(id => !string.IsNullOrWhiteSpace(id))
+            .Select(id => id!)
+            .Distinct(StringComparer.Ordinal)
+            .Count();
+
+        return Ok(new AuditReportDto(
+            fromDate,
+            toDate,
+            rows.Count,
+            distinctUsers,
+            actionCounts.Count,
+            actionCounts,
+            rows));
+    }
+
+    private static bool TryParseLocalDateRange(string? from, string? to, out DateTime fromUtc, out DateTime toUtcExclusive)
+    {
+        fromUtc = default;
+        toUtcExclusive = default;
+
+        if (string.IsNullOrWhiteSpace(from) && string.IsNullOrWhiteSpace(to))
+            return false;
+
+        var fromDate = DateOnly.TryParse(from, out var parsedFrom)
+            ? parsedFrom
+            : DateOnly.FromDateTime(DateTime.Now);
+        var toDate = DateOnly.TryParse(to, out var parsedTo) ? parsedTo : fromDate;
+        if (toDate < fromDate) (fromDate, toDate) = (toDate, fromDate);
+
+        fromUtc = DateTime.SpecifyKind(fromDate.ToDateTime(TimeOnly.MinValue), DateTimeKind.Local).ToUniversalTime();
+        toUtcExclusive = DateTime.SpecifyKind(toDate.AddDays(1).ToDateTime(TimeOnly.MinValue), DateTimeKind.Local).ToUniversalTime();
+        return true;
     }
 }

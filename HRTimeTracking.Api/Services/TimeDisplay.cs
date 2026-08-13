@@ -30,6 +30,21 @@ public static class TimeDisplay
     public static DateTime? AsLocal(DateTime? value) => value.HasValue ? AsLocal(value.Value) : null;
 
     /// <summary>
+    /// Audit / Identity timestamps are written with <see cref="DateTime.UtcNow"/>.
+    /// SQL Server returns them as Unspecified, so convert explicitly UTC → local.
+    /// </summary>
+    public static DateTime FromStoredUtc(DateTime value)
+    {
+        var utc = value.Kind switch
+        {
+            DateTimeKind.Utc => value,
+            DateTimeKind.Local => value.ToUniversalTime(),
+            _ => DateTime.SpecifyKind(value, DateTimeKind.Utc)
+        };
+        return DateTime.SpecifyKind(utc.ToLocalTime(), DateTimeKind.Local);
+    }
+
+    /// <summary>
     /// Exact whole seconds between two local timestamps (floor of elapsed ticks).
     /// Includes every completed second in the total.
     /// </summary>

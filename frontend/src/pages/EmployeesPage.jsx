@@ -184,9 +184,9 @@ export default function EmployeesPage() {
                     <td>{e.jobTitle || '—'}</td>
                     <td>{e.isActive ? 'Yes' : 'No'}</td>
                     <td className="row-actions">
-                      <button type="button" className="link-btn" onClick={() => startEdit(e)}>Edit</button>
+                      <button type="button" className="btn link-btn" onClick={() => startEdit(e)}>Edit</button>
                       {canManageMasterData && e.isActive && (
-                        <button type="button" className="link-btn danger" onClick={() => deactivate(e.id)}>Deactivate</button>
+                        <button type="button" className="btn link-btn danger" onClick={() => deactivate(e.id)}>Deactivate</button>
                       )}
                     </td>
                   </tr>

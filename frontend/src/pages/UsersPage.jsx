@@ -145,9 +145,9 @@ export default function UsersPage() {
                   </td>
                   <td>{u.isActive ? 'Yes' : 'No'}</td>
                   <td className="row-actions">
-                    <button type="button" className="link-btn" onClick={() => resetPassword(u.id)}>Password</button>
+                    <button type="button" className="btn link-btn" onClick={() => resetPassword(u.id)}>Password</button>
                     {u.isActive && (
-                      <button type="button" className="link-btn danger" onClick={() => deactivate(u.id)}>Deactivate</button>
+                      <button type="button" className="btn link-btn danger" onClick={() => deactivate(u.id)}>Deactivate</button>
                     )}
                   </td>
                 </tr>

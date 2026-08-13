@@ -1,50 +1,226 @@
 import { useEffect, useState } from 'react';
 import api from '../api/client';
+import AuditReportDocument, { renderAuditReportHtml } from '../components/AuditReportDocument';
 import { MessageBar } from '../components/UiBits';
+import { downloadHtmlReport } from '../lib/downloadReport';
+
+const todayIso = () => {
+  const d = new Date();
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+};
+
+function parseLocalDateTime(value) {
+  if (!value) return null;
+  const text = String(value).trim();
+  // API sends PC-local wall-clock times without Z.
+  const normalized = text.includes('T') ? text : text.replace(' ', 'T');
+  const d = new Date(normalized);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function formatWhen(value) {
+  const d = parseLocalDateTime(value);
+  if (!d) return '—';
+  return d.toLocaleString(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  });
+}
 
 export default function AuditPage() {
-  const [items, setItems] = useState([]);
+  const [from, setFrom] = useState(todayIso());
+  const [to, setTo] = useState(todayIso());
+  const [report, setReport] = useState(null);
   const [message, setMessage] = useState('');
+  const [msgType, setMsgType] = useState('info');
+  const [busy, setBusy] = useState(false);
+
+  const load = async () => {
+    setBusy(true);
+    try {
+      const { data } = await api.get('/audit/report', {
+        params: { from, to },
+      });
+      setReport(data);
+      setMessage('');
+    } catch (err) {
+      setMsgType('error');
+      setMessage(err.response?.data?.message || 'Failed to generate audit report.');
+    } finally {
+      setBusy(false);
+    }
+  };
 
   useEffect(() => {
-    api.get('/audit', { params: { take: 200 } })
-      .then((res) => setItems(res.data))
-      .catch((err) => setMessage(err.response?.data?.message || 'Failed to load audit log.'));
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const exportCsv = () => {
+    if (!report?.rows?.length) return;
+    const header = ['When', 'User', 'UserId', 'Action', 'EntityType', 'EntityId', 'Details', 'IpAddress'];
+    const lines = report.rows.map((r) => [
+      `"${formatWhen(r.createdAt)}"`,
+      `"${(r.userName || '').replaceAll('"', '""')}"`,
+      `"${r.userId || ''}"`,
+      `"${r.action}"`,
+      `"${r.entityType}"`,
+      `"${r.entityId || ''}"`,
+      `"${(r.details || '').replaceAll('"', '""')}"`,
+      `"${r.ipAddress || ''}"`,
+    ].join(','));
+    const blob = new Blob([[header.join(','), ...lines].join('\n')], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `audit-report-${from}-to-${to}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const printA4 = () => {
+    if (!report) return;
+    document.body.classList.add('printing-audit-report');
+    window.print();
+    window.addEventListener(
+      'afterprint',
+      () => document.body.classList.remove('printing-audit-report'),
+      { once: true },
+    );
+  };
+
+  const saveHtml = () => {
+    if (!report) return;
+    downloadHtmlReport(
+      `audit-report-${from}-to-${to}.html`,
+      renderAuditReportHtml(report),
+    );
+  };
 
   return (
     <div className="page">
-      <header className="page-header">
+      <header className="page-header no-print">
         <div>
           <h1>Audit Log</h1>
-          <p>Critical activity trail for developer oversight.</p>
+          <p>Generate developer audit reports by date range. Print A4, save HTML, or export CSV.</p>
+        </div>
+        <div className="header-actions">
+          <button type="button" className="btn btn-ghost" onClick={exportCsv} disabled={!report?.rows?.length}>
+            Export CSV
+          </button>
+          <button type="button" className="btn btn-ghost" onClick={saveHtml} disabled={!report}>
+            Save HTML
+          </button>
+          <button type="button" className="btn btn-primary" onClick={printA4} disabled={!report}>
+            Print A4 Report
+          </button>
         </div>
       </header>
 
-      <MessageBar message={message} type="error" onClose={() => setMessage('')} />
+      <MessageBar message={message} type={msgType} onClose={() => setMessage('')} />
 
-      <div className="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>When (UTC)</th>
-              <th>Action</th>
-              <th>Entity</th>
-              <th>Details</th>
-            </tr>
-          </thead>
-          <tbody>
-            {items.map((a) => (
-              <tr key={a.id}>
-                <td>{new Date(a.createdAt).toLocaleString()}</td>
-                <td>{a.action}</td>
-                <td>{a.entityType} {a.entityId ? `#${a.entityId}` : ''}</td>
-                <td>{a.details}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <div className="toolbar report-filters no-print">
+        <label>
+          From
+          <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+        </label>
+        <label>
+          To
+          <input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+        </label>
+        <button type="button" className="btn btn-primary" onClick={load} disabled={busy}>
+          {busy ? 'Generating…' : 'Generate'}
+        </button>
       </div>
+
+      {report && (
+        <>
+          <div className="stats-grid compact no-print">
+            <div className="stat-card">
+              <div className="stat-value">{report.totalEntries}</div>
+              <div className="stat-label">Total entries</div>
+            </div>
+            <div className="stat-card">
+              <div className="stat-value">{report.distinctUsers}</div>
+              <div className="stat-label">Distinct users</div>
+            </div>
+            <div className="stat-card">
+              <div className="stat-value">{report.distinctActions}</div>
+              <div className="stat-label">Distinct actions</div>
+            </div>
+            <div className="stat-card">
+              <div className="stat-value">{report.from === report.to ? report.from : `${report.from} → ${report.to}`}</div>
+              <div className="stat-label">Report period</div>
+            </div>
+          </div>
+
+          {!!report.actionCounts?.length && (
+            <div className="table-wrap no-print">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Action</th>
+                    <th>Count</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {report.actionCounts.map((item) => (
+                    <tr key={item.action}>
+                      <td>{item.action}</td>
+                      <td>{item.count}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          <div className="table-wrap no-print">
+            <table>
+              <thead>
+                <tr>
+                  <th>When</th>
+                  <th>User</th>
+                  <th>Action</th>
+                  <th>Entity</th>
+                  <th>Details</th>
+                </tr>
+              </thead>
+              <tbody>
+                {report.rows.map((row) => (
+                  <tr key={row.id}>
+                    <td>{formatWhen(row.createdAt)}</td>
+                    <td>{row.userName || row.userId || '—'}</td>
+                    <td>{row.action}</td>
+                    <td>
+                      {row.entityType}
+                      {row.entityId ? ` #${row.entityId}` : ''}
+                    </td>
+                    <td>{row.details || '—'}</td>
+                  </tr>
+                ))}
+                {!report.rows.length && (
+                  <tr>
+                    <td colSpan={5} className="empty">No audit entries for the selected dates.</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="break-report-print-source print-only audit-report-print-source" aria-hidden="true">
+            <AuditReportDocument report={report} />
+          </div>
+        </>
+      )}
     </div>
   );
 }

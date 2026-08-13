@@ -110,11 +110,11 @@ export default function DepartmentsPage() {
                   <td>{d.employeeCount}</td>
                   <td>{d.isActive ? 'Yes' : 'No'}</td>
                   <td className="row-actions">
-                    <button type="button" className="link-btn" onClick={() => { setEditingId(d.id); setForm({ name: d.name, description: d.description || '' }); }}>
+                    <button type="button" className="btn link-btn" onClick={() => { setEditingId(d.id); setForm({ name: d.name, description: d.description || '' }); }}>
                       Edit
                     </button>
                     {isDeveloper && d.isActive && (
-                      <button type="button" className="link-btn danger" onClick={() => deactivate(d.id)}>Deactivate</button>
+                      <button type="button" className="btn link-btn danger" onClick={() => deactivate(d.id)}>Deactivate</button>
                     )}
                   </td>
                 </tr>
