@@ -18,13 +18,13 @@ public class ShiftsController : ControllerBase
         _service = service;
     }
 
-    /// <summary>List shifts for dropdowns (HR Manager / Developer / HR Assistant).</summary>
+    /// <summary>List shifts for dropdowns and shift admin UI (HR Manager / Developer / HR Assistant).</summary>
     [HttpGet]
     [Authorize(Roles = $"{AppRoles.Developer},{AppRoles.HRManager},{AppRoles.HRAssistant}")]
     public async Task<ActionResult<IReadOnlyList<ShiftDto>>> GetAll([FromQuery] bool includeInactive = false)
     {
-        // Only Developer can request inactive shifts for admin UI.
-        if (includeInactive && !User.IsInRole(AppRoles.Developer))
+        // Developer and HR Manager can manage inactive shifts in the Shifts UI.
+        if (includeInactive && !(User.IsInRole(AppRoles.Developer) || User.IsInRole(AppRoles.HRManager)))
             includeInactive = false;
         return Ok(await _service.GetAllAsync(includeInactive));
     }
@@ -38,7 +38,7 @@ public class ShiftsController : ControllerBase
     }
 
     [HttpPost]
-    [Authorize(Roles = AppRoles.Developer)]
+    [Authorize(Roles = $"{AppRoles.Developer},{AppRoles.HRManager}")]
     public async Task<ActionResult<ShiftDto>> Create([FromBody] CreateShiftRequest request)
     {
         var (ok, error, data) = await _service.CreateAsync(request, User.GetUserId());
@@ -47,7 +47,7 @@ public class ShiftsController : ControllerBase
     }
 
     [HttpPut("{id:int}")]
-    [Authorize(Roles = AppRoles.Developer)]
+    [Authorize(Roles = $"{AppRoles.Developer},{AppRoles.HRManager}")]
     public async Task<ActionResult<ShiftDto>> Update(int id, [FromBody] UpdateShiftRequest request)
     {
         var (ok, error, data) = await _service.UpdateAsync(id, request, User.GetUserId());
@@ -56,7 +56,7 @@ public class ShiftsController : ControllerBase
     }
 
     [HttpPost("{id:int}/deactivate")]
-    [Authorize(Roles = AppRoles.Developer)]
+    [Authorize(Roles = $"{AppRoles.Developer},{AppRoles.HRManager}")]
     public async Task<ActionResult> Deactivate(int id)
     {
         var (ok, error) = await _service.DeactivateAsync(id, User.GetUserId());

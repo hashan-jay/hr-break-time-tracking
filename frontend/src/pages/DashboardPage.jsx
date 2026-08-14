@@ -182,6 +182,15 @@ export default function DashboardPage() {
                   tone="violet"
                 />
               )}
+              {auth.canManageMasterData && (
+                <QuickLink
+                  title="Shifts"
+                  description="Create and edit work shifts for employee assignment and reports."
+                  to="/app/shifts"
+                  cta="Manage shifts"
+                  tone="sky"
+                />
+              )}
               <QuickLink
                 title="Reports"
                 description="Generate A4 print-ready compliance reports and export CSV."

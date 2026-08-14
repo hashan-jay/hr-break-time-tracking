@@ -152,7 +152,7 @@ export default function AppLayout() {
     canTrackBreaks && { to: '/app/tracking', label: 'Live Tracking', icon: ICONS.tracking },
     canTrackBreaks && { to: '/app/employees', label: 'Employees', icon: ICONS.employees },
     canManageMasterData && { to: '/app/departments', label: 'Departments', icon: ICONS.departments },
-    isDeveloper && { to: '/app/shifts', label: 'Shifts', icon: ICONS.shifts },
+    canManageMasterData && { to: '/app/shifts', label: 'Shifts', icon: ICONS.shifts },
     { to: '/app/reports', label: 'Reports', icon: ICONS.reports },
     isDeveloper && { to: '/app/users', label: 'Users', icon: ICONS.users },
     isDeveloper && { to: '/app/settings', label: 'Settings', icon: ICONS.settings },
