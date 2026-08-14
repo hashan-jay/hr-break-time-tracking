@@ -34,9 +34,9 @@ function AppRoutes() {
           <Route element={<ProtectedRoute allow={['Developer', 'HRManager', 'HRAssistant']} />}>
             <Route path="tracking" element={<TrackingPage />} />
             <Route path="reports" element={<ReportsPage />} />
+            <Route path="employees" element={<EmployeesPage />} />
           </Route>
           <Route element={<ProtectedRoute allow={['Developer', 'HRManager']} />}>
-            <Route path="employees" element={<EmployeesPage />} />
             <Route path="departments" element={<DepartmentsPage />} />
           </Route>
           <Route element={<ProtectedRoute allow={['Developer']} />}>

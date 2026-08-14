@@ -43,10 +43,13 @@ builder.Services.AddSwaggerGen(options =>
 });
 
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
-    ?? "Server=(localdb)\\MSSQLLocalDB;Database=HRBreakTimeTracking;Trusted_Connection=True;MultipleActiveResultSets=true;TrustServerCertificate=True";
+    ?? throw new InvalidOperationException(
+        "ConnectionStrings:DefaultConnection is required. Use the local SQL Server default instance, for example: " +
+        "Server=localhost;Database=HRBreakTimeTracking;Trusted_Connection=True;MultipleActiveResultSets=True;Encrypt=True;TrustServerCertificate=True");
 
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseSqlServer(connectionString));
+    options.UseSqlServer(connectionString, sql =>
+        sql.EnableRetryOnFailure(maxRetryCount: 5, maxRetryDelay: TimeSpan.FromSeconds(10), errorNumbersToAdd: null)));
 
 builder.Services
     .AddIdentity<ApplicationUser, IdentityRole>(options =>
@@ -136,11 +139,8 @@ catch (Exception ex)
 {
     var logger = app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("Startup");
     logger.LogError(ex,
-        "Database migration/seed failed because LocalDB did not start. " +
-        "On Windows 11 NVMe, SQL Server 2022 LocalDB RTM crashes with misaligned log IOs until " +
-        "ForcedPhysicalSectorSizeInBytes is applied AND the machine is rebooted. " +
-        "Run scripts/Fix-LocalDb.ps1 as Administrator, reboot, then start MSSQLLocalDB and retry. " +
-        "Connection string stays (localdb)\\MSSQLLocalDB.");
+        "Database migration or seed failed. Confirm the SQL Server (MSSQLSERVER) service is running and " +
+        "ConnectionStrings:DefaultConnection points at the default instance (Server=localhost), not SQLEXPRESS or LocalDB.");
     throw;
 }
 

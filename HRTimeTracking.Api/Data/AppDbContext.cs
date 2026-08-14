@@ -23,6 +23,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
         builder.Entity<Department>(entity =>
         {
             entity.HasIndex(x => x.Name).IsUnique();
+            entity.HasIndex(x => x.IsDeleted);
             entity.Property(x => x.Name).HasMaxLength(100).IsRequired();
             entity.Property(x => x.Description).HasMaxLength(250);
         });
@@ -30,11 +31,9 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
         builder.Entity<Employee>(entity =>
         {
             entity.HasIndex(x => x.EmployeeCode).IsUnique();
+            entity.HasIndex(x => x.IsDeleted);
             entity.Property(x => x.EmployeeCode).HasMaxLength(50).IsRequired();
             entity.Property(x => x.FullName).HasMaxLength(150).IsRequired();
-            entity.Property(x => x.JobTitle).HasMaxLength(100);
-            entity.Property(x => x.Email).HasMaxLength(100);
-            entity.Property(x => x.Phone).HasMaxLength(30);
 
             entity.HasOne(x => x.Department)
                 .WithMany(x => x.Employees)

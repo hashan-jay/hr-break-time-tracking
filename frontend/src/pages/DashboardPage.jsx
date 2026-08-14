@@ -171,7 +171,7 @@ export default function DashboardPage() {
                   tone="amber"
                 />
               )}
-              {auth.canManageMasterData && (
+              {auth.canTrackBreaks && (
                 <QuickLink
                   title="Employees"
                   description="Maintain employee codes, departments, and active status."

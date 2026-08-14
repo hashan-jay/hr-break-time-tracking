@@ -7,9 +7,6 @@ const emptyForm = {
   employeeCode: '',
   fullName: '',
   departmentId: '',
-  jobTitle: '',
-  email: '',
-  phone: '',
 };
 
 export default function EmployeesPage() {
@@ -24,8 +21,12 @@ export default function EmployeesPage() {
 
   const load = async () => {
     const [empRes, deptRes] = await Promise.all([
-      api.get('/employees', { params: { search: search || undefined, includeInactive: true } }),
-      api.get('/departments', { params: { includeInactive: true } }),
+      api.get('/employees', {
+        params: {
+          search: search || undefined,
+        },
+      }),
+      api.get('/departments'),
     ]);
     setEmployees(empRes.data);
     setDepartments(deptRes.data);
@@ -41,6 +42,7 @@ export default function EmployeesPage() {
 
   const onSubmit = async (e) => {
     e.preventDefault();
+    if (!canManageMasterData) return;
     try {
       const payload = {
         ...form,
@@ -50,10 +52,6 @@ export default function EmployeesPage() {
         await api.put(`/employees/${editingId}`, {
           fullName: payload.fullName,
           departmentId: payload.departmentId,
-          jobTitle: payload.jobTitle,
-          email: payload.email,
-          phone: payload.phone,
-          isActive: true,
           hireDate: new Date().toISOString(),
         });
         setMsgType('success');
@@ -73,27 +71,29 @@ export default function EmployeesPage() {
   };
 
   const startEdit = (emp) => {
+    if (!canManageMasterData) return;
     setEditingId(emp.id);
     setForm({
       employeeCode: emp.employeeCode,
       fullName: emp.fullName,
       departmentId: String(emp.departmentId),
-      jobTitle: emp.jobTitle || '',
-      email: emp.email || '',
-      phone: emp.phone || '',
     });
   };
 
-  const deactivate = async (id) => {
-    if (!window.confirm('Deactivate this employee?')) return;
+  const remove = async (id) => {
+    if (!window.confirm('Delete this employee? Their details will be permanently removed from the database.')) return;
     try {
       await api.delete(`/employees/${id}`);
       setMsgType('success');
-      setMessage('Employee deactivated.');
+      setMessage('Employee deleted.');
+      if (editingId === id) {
+        setEditingId(null);
+        setForm(emptyForm);
+      }
       await load();
     } catch (err) {
       setMsgType('error');
-      setMessage(err.response?.data?.message || 'Deactivate failed.');
+      setMessage(err.response?.data?.message || 'Delete failed.');
     }
   };
 
@@ -109,48 +109,38 @@ export default function EmployeesPage() {
       <MessageBar message={message} type={msgType} onClose={() => setMessage('')} />
 
       <div className="split-forms">
-        <form className="card-form" onSubmit={onSubmit}>
-          <h2>{editingId ? 'Edit employee' : 'Add employee'}</h2>
-          {!editingId && (
-            <label>
-              Employee code
-              <input required value={form.employeeCode} onChange={(e) => setForm({ ...form, employeeCode: e.target.value })} />
-            </label>
-          )}
-          <label>
-            Full name
-            <input required value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} />
-          </label>
-          <label>
-            Department
-            <select required value={form.departmentId} onChange={(e) => setForm({ ...form, departmentId: e.target.value })}>
-              <option value="">Select…</option>
-              {departments.filter((d) => d.isActive).map((d) => (
-                <option key={d.id} value={d.id}>{d.name}</option>
-              ))}
-            </select>
-          </label>
-          <label>
-            Job title
-            <input value={form.jobTitle} onChange={(e) => setForm({ ...form, jobTitle: e.target.value })} />
-          </label>
-          <label>
-            Email
-            <input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
-          </label>
-          <label>
-            Phone
-            <input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
-          </label>
-          <div className="form-actions">
-            <button className="btn btn-primary" type="submit">{editingId ? 'Update' : 'Create'}</button>
-            {editingId && (
-              <button type="button" className="btn btn-ghost" onClick={() => { setEditingId(null); setForm(emptyForm); }}>
-                Cancel
-              </button>
+        {canManageMasterData && (
+          <form className="card-form" onSubmit={onSubmit}>
+            <h2>{editingId ? 'Edit employee' : 'Add employee'}</h2>
+            {!editingId && (
+              <label>
+                Employee code
+                <input required value={form.employeeCode} onChange={(e) => setForm({ ...form, employeeCode: e.target.value })} />
+              </label>
             )}
-          </div>
-        </form>
+            <label>
+              Full name
+              <input required value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} />
+            </label>
+            <label>
+              Department
+              <select required value={form.departmentId} onChange={(e) => setForm({ ...form, departmentId: e.target.value })}>
+                <option value="">Select…</option>
+                {departments.filter((d) => !d.isDeleted).map((d) => (
+                  <option key={d.id} value={d.id}>{d.name}</option>
+                ))}
+              </select>
+            </label>
+            <div className="form-actions">
+              <button className="btn btn-primary" type="submit">{editingId ? 'Update' : 'Create'}</button>
+              {editingId && (
+                <button type="button" className="btn btn-ghost" onClick={() => { setEditingId(null); setForm(emptyForm); }}>
+                  Cancel
+                </button>
+              )}
+            </div>
+          </form>
+        )}
 
         <div>
           <div className="toolbar">
@@ -170,8 +160,6 @@ export default function EmployeesPage() {
                   <th>Code</th>
                   <th>Name</th>
                   <th>Department</th>
-                  <th>Title</th>
-                  <th>Active</th>
                   <th />
                 </tr>
               </thead>
@@ -181,13 +169,11 @@ export default function EmployeesPage() {
                     <td>{e.employeeCode}</td>
                     <td>{e.fullName}</td>
                     <td>{e.departmentName}</td>
-                    <td>{e.jobTitle || '—'}</td>
-                    <td>{e.isActive ? 'Yes' : 'No'}</td>
                     <td className="row-actions">
-                      <button type="button" className="btn link-btn" onClick={() => startEdit(e)}>Edit</button>
-                      {canManageMasterData && e.isActive && (
-                        <button type="button" className="btn link-btn danger" onClick={() => deactivate(e.id)}>Deactivate</button>
+                      {canManageMasterData && (
+                        <button type="button" className="btn link-btn" onClick={() => startEdit(e)}>Edit</button>
                       )}
+                      <button type="button" className="btn link-btn danger" onClick={() => remove(e.id)}>Delete</button>
                     </td>
                   </tr>
                 ))}

@@ -16,16 +16,9 @@ public class Employee
 
     public Department Department { get; set; } = null!;
 
-    [MaxLength(100)]
-    public string? JobTitle { get; set; }
+    public bool IsDeleted { get; set; }
 
-    [MaxLength(100)]
-    public string? Email { get; set; }
-
-    [MaxLength(30)]
-    public string? Phone { get; set; }
-
-    public bool IsActive { get; set; } = true;
+    public DateTime? DeletedAt { get; set; }
 
     public DateTime HireDate { get; set; } = DateTime.UtcNow;
 

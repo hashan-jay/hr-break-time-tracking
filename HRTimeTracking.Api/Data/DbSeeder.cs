@@ -46,20 +46,20 @@ public static class DbSeeder
         {
             var departments = new[]
             {
-                new Department { Name = "Human Resources", Description = "HR and people operations", IsActive = true, CreatedAt = DateTime.UtcNow },
-                new Department { Name = "Finance", Description = "Accounts and finance", IsActive = true, CreatedAt = DateTime.UtcNow },
-                new Department { Name = "Operations", Description = "Day-to-day operations", IsActive = true, CreatedAt = DateTime.UtcNow },
-                new Department { Name = "IT", Description = "Information technology", IsActive = true, CreatedAt = DateTime.UtcNow }
+                new Department { Name = "Human Resources", Description = "HR and people operations", CreatedAt = DateTime.UtcNow },
+                new Department { Name = "Finance", Description = "Accounts and finance", CreatedAt = DateTime.UtcNow },
+                new Department { Name = "Operations", Description = "Day-to-day operations", CreatedAt = DateTime.UtcNow },
+                new Department { Name = "IT", Description = "Information technology", CreatedAt = DateTime.UtcNow }
             };
             db.Departments.AddRange(departments);
             await db.SaveChangesAsync();
 
             db.Employees.AddRange(
-                new Employee { EmployeeCode = "EMP001", FullName = "Aisha Fernando", DepartmentId = departments[0].Id, JobTitle = "HR Officer", IsActive = true, HireDate = DateTime.UtcNow, CreatedAt = DateTime.UtcNow },
-                new Employee { EmployeeCode = "EMP002", FullName = "Nuwan Perera", DepartmentId = departments[1].Id, JobTitle = "Accountant", IsActive = true, HireDate = DateTime.UtcNow, CreatedAt = DateTime.UtcNow },
-                new Employee { EmployeeCode = "EMP003", FullName = "Sajith Silva", DepartmentId = departments[2].Id, JobTitle = "Ops Lead", IsActive = true, HireDate = DateTime.UtcNow, CreatedAt = DateTime.UtcNow },
-                new Employee { EmployeeCode = "EMP004", FullName = "Dilani Jayasuriya", DepartmentId = departments[3].Id, JobTitle = "Support Engineer", IsActive = true, HireDate = DateTime.UtcNow, CreatedAt = DateTime.UtcNow },
-                new Employee { EmployeeCode = "EMP005", FullName = "Kasun Bandara", DepartmentId = departments[2].Id, JobTitle = "Coordinator", IsActive = true, HireDate = DateTime.UtcNow, CreatedAt = DateTime.UtcNow }
+                new Employee { EmployeeCode = "EMP001", FullName = "Aisha Fernando", DepartmentId = departments[0].Id, HireDate = DateTime.UtcNow, CreatedAt = DateTime.UtcNow },
+                new Employee { EmployeeCode = "EMP002", FullName = "Nuwan Perera", DepartmentId = departments[1].Id, HireDate = DateTime.UtcNow, CreatedAt = DateTime.UtcNow },
+                new Employee { EmployeeCode = "EMP003", FullName = "Sajith Silva", DepartmentId = departments[2].Id, HireDate = DateTime.UtcNow, CreatedAt = DateTime.UtcNow },
+                new Employee { EmployeeCode = "EMP004", FullName = "Dilani Jayasuriya", DepartmentId = departments[3].Id, HireDate = DateTime.UtcNow, CreatedAt = DateTime.UtcNow },
+                new Employee { EmployeeCode = "EMP005", FullName = "Kasun Bandara", DepartmentId = departments[2].Id, HireDate = DateTime.UtcNow, CreatedAt = DateTime.UtcNow }
             );
             await db.SaveChangesAsync();
         }

@@ -20,19 +20,27 @@ public class DepartmentsController : ControllerBase
 
     [HttpGet]
     [Authorize(Roles = $"{AppRoles.Developer},{AppRoles.HRManager},{AppRoles.HRAssistant}")]
-    public async Task<ActionResult<IReadOnlyList<DepartmentDto>>> GetAll([FromQuery] bool includeInactive = false, [FromQuery] string? search = null)
-        => Ok(await _service.GetAllAsync(includeInactive, search));
+    public async Task<ActionResult<IReadOnlyList<DepartmentDto>>> GetAll(
+        [FromQuery] bool includeDeleted = false,
+        [FromQuery] string? search = null)
+    {
+        var canSeeDeleted = User.IsInRole(AppRoles.Developer);
+        return Ok(await _service.GetAllAsync(canSeeDeleted && includeDeleted, search));
+    }
 
     [HttpGet("{id:int}")]
     [Authorize(Roles = $"{AppRoles.Developer},{AppRoles.HRManager},{AppRoles.HRAssistant}")]
     public async Task<ActionResult<DepartmentDto>> GetById(int id)
     {
         var item = await _service.GetByIdAsync(id);
-        return item is null ? NotFound(new ApiMessage("Department not found.")) : Ok(item);
+        if (item is null) return NotFound(new ApiMessage("Department not found."));
+        if (item.IsDeleted && !User.IsInRole(AppRoles.Developer))
+            return NotFound(new ApiMessage("Department not found."));
+        return Ok(item);
     }
 
     [HttpPost]
-    [Authorize(Roles = $"{AppRoles.Developer},{AppRoles.HRManager}")]
+    [Authorize(Roles = AppRoles.Developer)]
     public async Task<ActionResult<DepartmentDto>> Create([FromBody] CreateDepartmentRequest request)
     {
         var (ok, error, data) = await _service.CreateAsync(request, User.GetUserId());
@@ -41,7 +49,7 @@ public class DepartmentsController : ControllerBase
     }
 
     [HttpPut("{id:int}")]
-    [Authorize(Roles = $"{AppRoles.Developer},{AppRoles.HRManager}")]
+    [Authorize(Roles = AppRoles.Developer)]
     public async Task<ActionResult<DepartmentDto>> Update(int id, [FromBody] UpdateDepartmentRequest request)
     {
         var (ok, error, data) = await _service.UpdateAsync(id, request, User.GetUserId());
@@ -51,10 +59,19 @@ public class DepartmentsController : ControllerBase
 
     [HttpDelete("{id:int}")]
     [Authorize(Roles = AppRoles.Developer)]
-    public async Task<ActionResult<ApiMessage>> Deactivate(int id)
+    public async Task<ActionResult<ApiMessage>> Delete(int id)
     {
-        var (ok, error) = await _service.DeactivateAsync(id, User.GetUserId());
-        if (!ok) return BadRequest(new ApiMessage(error ?? "Deactivate failed."));
-        return Ok(new ApiMessage("Department deactivated."));
+        var (ok, error) = await _service.DeleteAsync(id, User.GetUserId());
+        if (!ok) return BadRequest(new ApiMessage(error ?? "Delete failed."));
+        return Ok(new ApiMessage("Department deleted."));
+    }
+
+    [HttpPost("{id:int}/recover")]
+    [Authorize(Roles = AppRoles.Developer)]
+    public async Task<ActionResult<DepartmentDto>> Recover(int id)
+    {
+        var (ok, error, data) = await _service.RecoverAsync(id, User.GetUserId());
+        if (!ok || data is null) return BadRequest(new ApiMessage(error ?? "Recover failed."));
+        return Ok(data);
     }
 }

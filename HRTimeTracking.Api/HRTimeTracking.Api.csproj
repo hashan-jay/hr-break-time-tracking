@@ -4,7 +4,18 @@
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <!-- Avoid MSB3027 file-lock failures when dotnet watch rebuilds on Windows. -->
+    <UseAppHost>false</UseAppHost>
+    <!-- Model/EF changes cannot be hot-reloaded; restart instead of leaving a broken process. -->
+    <HotReloadAutoRestart>true</HotReloadAutoRestart>
   </PropertyGroup>
+
+  <ItemGroup>
+    <!-- New migration types crash hot reload; apply them on a full restart via MigrateAsync. -->
+    <Watch Remove="Data\Migrations\**\*" />
+    <Watch Remove="obj\**\*" />
+    <Watch Remove="bin\**\*" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="BCrypt.Net-Next" Version="4.2.0" />

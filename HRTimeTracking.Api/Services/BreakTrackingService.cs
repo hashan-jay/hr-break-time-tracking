@@ -36,7 +36,7 @@ public class BreakTrackingService : IBreakTrackingService
 
         var employeesQuery = _db.Employees.AsNoTracking()
             .Include(e => e.Department)
-            .Where(e => e.IsActive);
+            .Where(e => !e.IsDeleted);
 
         if (departmentId.HasValue)
             employeesQuery = employeesQuery.Where(e => e.DepartmentId == departmentId.Value);
@@ -110,8 +110,8 @@ public class BreakTrackingService : IBreakTrackingService
     public async Task<(bool Ok, string? Error, EmployeeBreakStatusDto? Data)> RecordOutAsync(int employeeId, string? userId)
     {
         var employee = await _db.Employees.Include(e => e.Department)
-            .FirstOrDefaultAsync(e => e.Id == employeeId && e.IsActive);
-        if (employee is null) return (false, "Active employee not found.", null);
+            .FirstOrDefaultAsync(e => e.Id == employeeId && !e.IsDeleted);
+        if (employee is null) return (false, "Employee not found.", null);
 
         var openExists = await _db.BreakSessions.AnyAsync(b => b.EmployeeId == employeeId && b.InTime == null);
         if (openExists) return (false, "Employee is already on break. Capture in-time first.", null);
@@ -169,7 +169,7 @@ public class BreakTrackingService : IBreakTrackingService
 
         var query = _db.BreakSessions.AsNoTracking()
             .Include(b => b.Employee).ThenInclude(e => e.Department)
-            .Where(b => b.BreakDate >= fromDate && b.BreakDate <= toDate);
+            .Where(b => b.BreakDate >= fromDate && b.BreakDate <= toDate && !b.Employee.IsDeleted);
 
         if (employeeId.HasValue) query = query.Where(b => b.EmployeeId == employeeId.Value);
         if (departmentId.HasValue) query = query.Where(b => b.Employee.DepartmentId == departmentId.Value);

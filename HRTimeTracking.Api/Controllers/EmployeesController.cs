@@ -21,17 +21,19 @@ public class EmployeesController : ControllerBase
     [HttpGet]
     [Authorize(Roles = $"{AppRoles.Developer},{AppRoles.HRManager},{AppRoles.HRAssistant}")]
     public async Task<ActionResult<IReadOnlyList<EmployeeDto>>> GetAll(
-        [FromQuery] bool includeInactive = false,
         [FromQuery] string? search = null,
         [FromQuery] int? departmentId = null)
-        => Ok(await _service.GetAllAsync(includeInactive, search, departmentId));
+    {
+        return Ok(await _service.GetAllAsync(search, departmentId));
+    }
 
     [HttpGet("{id:int}")]
     [Authorize(Roles = $"{AppRoles.Developer},{AppRoles.HRManager},{AppRoles.HRAssistant}")]
     public async Task<ActionResult<EmployeeDto>> GetById(int id)
     {
         var item = await _service.GetByIdAsync(id);
-        return item is null ? NotFound(new ApiMessage("Employee not found.")) : Ok(item);
+        if (item is null) return NotFound(new ApiMessage("Employee not found."));
+        return Ok(item);
     }
 
     [HttpPost]
@@ -53,11 +55,11 @@ public class EmployeesController : ControllerBase
     }
 
     [HttpDelete("{id:int}")]
-    [Authorize(Roles = $"{AppRoles.Developer},{AppRoles.HRManager}")]
-    public async Task<ActionResult<ApiMessage>> Deactivate(int id)
+    [Authorize(Roles = $"{AppRoles.Developer},{AppRoles.HRManager},{AppRoles.HRAssistant}")]
+    public async Task<ActionResult<ApiMessage>> Delete(int id)
     {
-        var (ok, error) = await _service.DeactivateAsync(id, User.GetUserId());
-        if (!ok) return BadRequest(new ApiMessage(error ?? "Deactivate failed."));
-        return Ok(new ApiMessage("Employee deactivated."));
+        var (ok, error) = await _service.DeleteAsync(id, User.GetUserId());
+        if (!ok) return BadRequest(new ApiMessage(error ?? "Delete failed."));
+        return Ok(new ApiMessage("Employee deleted."));
     }
 }

@@ -1123,6 +1123,8 @@ th {
 tbody tr:hover { background: #f8fbf8; }
 tbody tr.selected { background: #e7f4ef; }
 tbody tr.on-break { box-shadow: inset 3px 0 0 var(--amber); }
+tbody tr.is-deleted { background: #faf6f4; color: var(--muted); }
+tbody tr.is-deleted:hover { background: #f4ece8; }
 .empty { text-align: center; color: var(--muted); padding: 1.5rem; }
 
 .status-badge {
@@ -1222,6 +1224,16 @@ tbody tr.on-break { box-shadow: inset 3px 0 0 var(--amber); }
   color: #fff;
   background: #912018;
   border-color: #912018;
+}
+.link-btn.recover {
+  color: #fff;
+  background: var(--green, #157347);
+  border-color: var(--green, #157347);
+}
+.link-btn.recover:hover {
+  color: #fff;
+  background: #0f5c38;
+  border-color: #0f5c38;
 }
 .muted { color: var(--muted); font-size: 0.85rem; }
 

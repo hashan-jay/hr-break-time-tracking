@@ -41,7 +41,8 @@ public record DepartmentDto(
     int Id,
     string Name,
     string? Description,
-    bool IsActive,
+    bool IsDeleted,
+    DateTime? DeletedAt,
     int EmployeeCount,
     DateTime CreatedAt);
 
@@ -51,8 +52,7 @@ public record CreateDepartmentRequest(
 
 public record UpdateDepartmentRequest(
     [Required, MaxLength(100)] string Name,
-    [MaxLength(250)] string? Description,
-    bool IsActive);
+    [MaxLength(250)] string? Description);
 
 public record EmployeeDto(
     int Id,
@@ -60,27 +60,18 @@ public record EmployeeDto(
     string FullName,
     int DepartmentId,
     string DepartmentName,
-    string? JobTitle,
-    string? Email,
-    string? Phone,
-    bool IsActive,
+    bool IsDeleted,
+    DateTime? DeletedAt,
     DateTime HireDate);
 
 public record CreateEmployeeRequest(
     [Required, MaxLength(50)] string EmployeeCode,
     [Required, MaxLength(150)] string FullName,
-    [Required] int DepartmentId,
-    [MaxLength(100)] string? JobTitle,
-    [MaxLength(100)] string? Email,
-    [MaxLength(30)] string? Phone);
+    [Required] int DepartmentId);
 
 public record UpdateEmployeeRequest(
     [Required, MaxLength(150)] string FullName,
     [Required] int DepartmentId,
-    [MaxLength(100)] string? JobTitle,
-    [MaxLength(100)] string? Email,
-    [MaxLength(30)] string? Phone,
-    bool IsActive,
     DateTime HireDate);
 
 public record BreakSessionDto(

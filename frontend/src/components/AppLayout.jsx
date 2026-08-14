@@ -144,7 +144,7 @@ export default function AppLayout() {
     { to: '/', end: true, label: 'Employee portal', icon: ICONS.portal },
     { to: '/app', end: true, label: 'Dashboard', icon: ICONS.dashboard },
     canTrackBreaks && { to: '/app/tracking', label: 'Live Tracking', icon: ICONS.tracking },
-    canManageMasterData && { to: '/app/employees', label: 'Employees', icon: ICONS.employees },
+    canTrackBreaks && { to: '/app/employees', label: 'Employees', icon: ICONS.employees },
     canManageMasterData && { to: '/app/departments', label: 'Departments', icon: ICONS.departments },
     { to: '/app/reports', label: 'Reports', icon: ICONS.reports },
     isDeveloper && { to: '/app/users', label: 'Users', icon: ICONS.users },

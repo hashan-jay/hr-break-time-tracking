@@ -31,8 +31,8 @@ public class ReportService : IReportService
         var totalBreaksToday = await _db.BreakSessions.CountAsync(b => b.BreakDate == today);
 
         return new DashboardDto(
-            await _db.Employees.CountAsync(e => e.IsActive),
-            await _db.Departments.CountAsync(d => d.IsActive),
+            await _db.Employees.CountAsync(e => !e.IsDeleted),
+            await _db.Departments.CountAsync(d => !d.IsDeleted),
             board.OnBreakCount,
             board.ExceededCount,
             board.SatisfiedCount,
@@ -47,7 +47,7 @@ public class ReportService : IReportService
 
         var sessionsQuery = _db.BreakSessions.AsNoTracking()
             .Include(b => b.Employee).ThenInclude(e => e.Department)
-            .Where(b => b.BreakDate >= from && b.BreakDate <= to);
+            .Where(b => b.BreakDate >= from && b.BreakDate <= to && !b.Employee.IsDeleted);
 
         if (departmentId.HasValue)
             sessionsQuery = sessionsQuery.Where(b => b.Employee.DepartmentId == departmentId.Value);
