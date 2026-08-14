@@ -7,7 +7,7 @@ namespace HRTimeTracking.Api.Services;
 
 public interface IBreakTrackingService
 {
-    Task<LiveBoardDto> GetLiveBoardAsync(string? search = null, int? departmentId = null);
+    Task<LiveBoardDto> GetLiveBoardAsync(string? search = null, int? departmentId = null, int? shiftId = null, int? shiftId2 = null);
     Task<EmployeeBreakStatusDto?> GetEmployeeStatusAsync(int employeeId);
     Task<(bool Ok, string? Error, EmployeeBreakStatusDto? Data)> ToggleAsync(int employeeId, string? userId);
     Task<(bool Ok, string? Error, EmployeeBreakStatusDto? Data)> RecordOutAsync(int employeeId, string? userId);
@@ -28,7 +28,7 @@ public class BreakTrackingService : IBreakTrackingService
         _settings = settings;
     }
 
-    public async Task<LiveBoardDto> GetLiveBoardAsync(string? search = null, int? departmentId = null)
+    public async Task<LiveBoardDto> GetLiveBoardAsync(string? search = null, int? departmentId = null, int? shiftId = null, int? shiftId2 = null)
     {
         var today = TimeDisplay.TodayLocal();
         var now = TimeDisplay.NowLocal();
@@ -40,6 +40,15 @@ public class BreakTrackingService : IBreakTrackingService
 
         if (departmentId.HasValue)
             employeesQuery = employeesQuery.Where(e => e.DepartmentId == departmentId.Value);
+
+        // One or two shift filters: show employees assigned to either selected shift (overlap view).
+        var shiftIds = new List<int>();
+        if (shiftId.HasValue) shiftIds.Add(shiftId.Value);
+        if (shiftId2.HasValue && !shiftIds.Contains(shiftId2.Value)) shiftIds.Add(shiftId2.Value);
+        if (shiftIds.Count == 1)
+            employeesQuery = employeesQuery.Where(e => e.ShiftId == shiftIds[0]);
+        else if (shiftIds.Count > 1)
+            employeesQuery = employeesQuery.Where(e => e.ShiftId != null && shiftIds.Contains(e.ShiftId.Value));
 
         if (!string.IsNullOrWhiteSpace(search))
         {

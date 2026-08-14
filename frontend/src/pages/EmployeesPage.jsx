@@ -7,12 +7,14 @@ const emptyForm = {
   employeeCode: '',
   fullName: '',
   departmentId: '',
+  shiftId: '',
 };
 
 export default function EmployeesPage() {
   const { canManageMasterData } = useAuth();
   const [employees, setEmployees] = useState([]);
   const [departments, setDepartments] = useState([]);
+  const [shifts, setShifts] = useState([]);
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState(null);
   const [search, setSearch] = useState('');
@@ -20,16 +22,18 @@ export default function EmployeesPage() {
   const [msgType, setMsgType] = useState('info');
 
   const load = async () => {
-    const [empRes, deptRes] = await Promise.all([
+    const [empRes, deptRes, shiftRes] = await Promise.all([
       api.get('/employees', {
         params: {
           search: search || undefined,
         },
       }),
       api.get('/departments'),
+      api.get('/shifts'),
     ]);
     setEmployees(empRes.data);
     setDepartments(deptRes.data);
+    setShifts(shiftRes.data);
   };
 
   useEffect(() => {
@@ -44,14 +48,17 @@ export default function EmployeesPage() {
     e.preventDefault();
     if (!canManageMasterData) return;
     try {
+      const shiftId = form.shiftId ? Number(form.shiftId) : null;
       const payload = {
         ...form,
         departmentId: Number(form.departmentId),
+        shiftId,
       };
       if (editingId) {
         await api.put(`/employees/${editingId}`, {
           fullName: payload.fullName,
           departmentId: payload.departmentId,
+          shiftId: payload.shiftId,
           hireDate: new Date().toISOString(),
         });
         setMsgType('success');
@@ -77,6 +84,7 @@ export default function EmployeesPage() {
       employeeCode: emp.employeeCode,
       fullName: emp.fullName,
       departmentId: String(emp.departmentId),
+      shiftId: emp.shiftId ? String(emp.shiftId) : '',
     });
   };
 
@@ -97,12 +105,14 @@ export default function EmployeesPage() {
     }
   };
 
+  const shiftOptions = shifts.filter((s) => s.isActive || String(s.id) === String(form.shiftId));
+
   return (
     <div className="page">
       <header className="page-header">
         <div>
           <h1>Employees</h1>
-          <p>Maintain employee master data used by live break tracking.</p>
+          <p>Maintain employee master data and assign work shifts for shift-wise reporting.</p>
         </div>
       </header>
 
@@ -128,6 +138,15 @@ export default function EmployeesPage() {
                 <option value="">Select…</option>
                 {departments.filter((d) => !d.isDeleted).map((d) => (
                   <option key={d.id} value={d.id}>{d.name}</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Shift
+              <select value={form.shiftId} onChange={(e) => setForm({ ...form, shiftId: e.target.value })}>
+                <option value="">No shift assigned</option>
+                {shiftOptions.map((s) => (
+                  <option key={s.id} value={s.id}>{s.displayLabel}</option>
                 ))}
               </select>
             </label>
@@ -160,6 +179,7 @@ export default function EmployeesPage() {
                   <th>Code</th>
                   <th>Name</th>
                   <th>Department</th>
+                  <th>Shift</th>
                   <th />
                 </tr>
               </thead>
@@ -169,6 +189,7 @@ export default function EmployeesPage() {
                     <td>{e.employeeCode}</td>
                     <td>{e.fullName}</td>
                     <td>{e.departmentName}</td>
+                    <td>{e.shiftDisplay || e.shiftName || '—'}</td>
                     <td className="row-actions">
                       {canManageMasterData && (
                         <button type="button" className="btn link-btn" onClick={() => startEdit(e)}>Edit</button>

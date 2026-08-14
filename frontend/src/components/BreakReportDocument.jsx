@@ -16,6 +16,7 @@ export default function BreakReportDocument({ report, filters }) {
   const generatedAt = formatGeneratedAt();
   const deptLabel = filters?.departmentName || 'All departments';
   const empLabel = filters?.employeeName || 'All employees';
+  const shiftLabel = filters?.shiftName || report.shiftDisplay || report.shiftName || 'All shifts';
 
   return (
     <div className="break-report-document">
@@ -33,6 +34,10 @@ export default function BreakReportDocument({ report, filters }) {
         <div>
           <span>Period to</span>
           <strong>{report.to}</strong>
+        </div>
+        <div>
+          <span>Shift</span>
+          <strong>{shiftLabel}</strong>
         </div>
         <div>
           <span>Department</span>
@@ -80,6 +85,7 @@ export default function BreakReportDocument({ report, filters }) {
               <th>Code</th>
               <th>Employee</th>
               <th>Department</th>
+              <th>Shift</th>
               <th>Total (HH:MM:SS)</th>
               <th>Seconds</th>
               <th>Breaks</th>
@@ -93,6 +99,7 @@ export default function BreakReportDocument({ report, filters }) {
                 <td>{r.employeeCode}</td>
                 <td>{r.employeeName}</td>
                 <td>{r.departmentName}</td>
+                <td>{r.shiftName || '—'}</td>
                 <td>{r.totalBreakDisplay}</td>
                 <td>{r.totalBreakSeconds}</td>
                 <td>{r.breakCount}</td>
@@ -101,7 +108,7 @@ export default function BreakReportDocument({ report, filters }) {
             ))}
             {!report.rows?.length && (
               <tr>
-                <td colSpan={8}>No records for the selected filters.</td>
+                <td colSpan={9}>No records for the selected filters.</td>
               </tr>
             )}
           </tbody>
@@ -120,6 +127,7 @@ export function renderBreakReportHtml(report, filters) {
   const generatedAt = formatGeneratedAt();
   const deptLabel = filters?.departmentName || 'All departments';
   const empLabel = filters?.employeeName || 'All employees';
+  const shiftLabel = filters?.shiftName || report.shiftDisplay || report.shiftName || 'All shifts';
   const rows = (report.rows || [])
     .map((r) => {
       const cls =
@@ -135,6 +143,7 @@ export function renderBreakReportHtml(report, filters) {
         <td>${r.employeeCode}</td>
         <td>${escapeHtml(r.employeeName)}</td>
         <td>${escapeHtml(r.departmentName)}</td>
+        <td>${escapeHtml(r.shiftName || '—')}</td>
         <td>${r.totalBreakDisplay}</td>
         <td>${r.totalBreakSeconds}</td>
         <td>${r.breakCount}</td>
@@ -150,6 +159,7 @@ export function renderBreakReportHtml(report, filters) {
     <div class="meta">
       <div><span>Period from</span><strong>${report.from}</strong></div>
       <div><span>Period to</span><strong>${report.to}</strong></div>
+      <div><span>Shift</span><strong>${escapeHtml(shiftLabel)}</strong></div>
       <div><span>Department</span><strong>${escapeHtml(deptLabel)}</strong></div>
       <div><span>Employee</span><strong>${escapeHtml(empLabel)}</strong></div>
       <div><span>Daily limit</span><strong>${report.dailyLimitMinutes} minutes</strong></div>
@@ -164,12 +174,12 @@ export function renderBreakReportHtml(report, filters) {
     <table>
       <thead>
         <tr>
-          <th>Date</th><th>Code</th><th>Employee</th><th>Department</th>
+          <th>Date</th><th>Code</th><th>Employee</th><th>Department</th><th>Shift</th>
           <th>Total</th><th>Seconds</th><th>Breaks</th><th>Status</th>
         </tr>
       </thead>
       <tbody>
-        ${rows || '<tr><td colspan="8">No records for the selected filters.</td></tr>'}
+        ${rows || '<tr><td colspan="9">No records for the selected filters.</td></tr>'}
       </tbody>
     </table>
     <div class="footer">

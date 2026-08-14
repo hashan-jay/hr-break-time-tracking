@@ -12,6 +12,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
 
     public DbSet<Department> Departments => Set<Department>();
     public DbSet<Employee> Employees => Set<Employee>();
+    public DbSet<Shift> Shifts => Set<Shift>();
     public DbSet<BreakSession> BreakSessions => Set<BreakSession>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
     public DbSet<SystemSetting> SystemSettings => Set<SystemSetting>();
@@ -28,10 +29,18 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
             entity.Property(x => x.Description).HasMaxLength(250);
         });
 
+        builder.Entity<Shift>(entity =>
+        {
+            entity.HasIndex(x => x.Name).IsUnique();
+            entity.HasIndex(x => x.IsActive);
+            entity.Property(x => x.Name).HasMaxLength(100).IsRequired();
+        });
+
         builder.Entity<Employee>(entity =>
         {
             entity.HasIndex(x => x.EmployeeCode).IsUnique();
             entity.HasIndex(x => x.IsDeleted);
+            entity.HasIndex(x => x.ShiftId);
             entity.Property(x => x.EmployeeCode).HasMaxLength(50).IsRequired();
             entity.Property(x => x.FullName).HasMaxLength(150).IsRequired();
 
@@ -39,6 +48,11 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
                 .WithMany(x => x.Employees)
                 .HasForeignKey(x => x.DepartmentId)
                 .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(x => x.Shift)
+                .WithMany(x => x.Employees)
+                .HasForeignKey(x => x.ShiftId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
 
         builder.Entity<BreakSession>(entity =>

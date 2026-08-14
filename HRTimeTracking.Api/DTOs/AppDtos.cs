@@ -60,6 +60,9 @@ public record EmployeeDto(
     string FullName,
     int DepartmentId,
     string DepartmentName,
+    int? ShiftId,
+    string? ShiftName,
+    string? ShiftDisplay,
     bool IsDeleted,
     DateTime? DeletedAt,
     DateTime HireDate);
@@ -67,12 +70,37 @@ public record EmployeeDto(
 public record CreateEmployeeRequest(
     [Required, MaxLength(50)] string EmployeeCode,
     [Required, MaxLength(150)] string FullName,
-    [Required] int DepartmentId);
+    [Required] int DepartmentId,
+    int? ShiftId);
 
 public record UpdateEmployeeRequest(
     [Required, MaxLength(150)] string FullName,
     [Required] int DepartmentId,
-    DateTime HireDate);
+    DateTime HireDate,
+    int? ShiftId);
+
+public record ShiftDto(
+    int Id,
+    string Name,
+    string StartTime,
+    string EndTime,
+    bool SpansNextDay,
+    string DisplayLabel,
+    bool IsActive,
+    int EmployeeCount,
+    DateTime CreatedAt);
+
+public record CreateShiftRequest(
+    [Required, MaxLength(100)] string Name,
+    [Required] string StartTime,
+    [Required] string EndTime,
+    bool IsActive = true);
+
+public record UpdateShiftRequest(
+    [Required, MaxLength(100)] string Name,
+    [Required] string StartTime,
+    [Required] string EndTime,
+    bool IsActive);
 
 public record BreakSessionDto(
     int Id,
@@ -118,6 +146,7 @@ public record ReportRowDto(
     string EmployeeCode,
     string EmployeeName,
     string DepartmentName,
+    string? ShiftName,
     DateOnly Date,
     int TotalBreakSeconds,
     string TotalBreakDisplay,
@@ -133,6 +162,9 @@ public record ReportSummaryDto(
     int WellSatisfiedCount,
     int SatisfiedCount,
     int ExceededCount,
+    int? ShiftId,
+    string? ShiftName,
+    string? ShiftDisplay,
     IReadOnlyList<ReportRowDto> Rows);
 
 public record DashboardDto(

@@ -44,8 +44,11 @@ function liveElapsedSeconds(outTime, nowMs) {
 export default function TrackingPage() {
   const [board, setBoard] = useState(null);
   const [departments, setDepartments] = useState([]);
+  const [shifts, setShifts] = useState([]);
   const [search, setSearch] = useState('');
   const [departmentId, setDepartmentId] = useState('');
+  const [shiftId, setShiftId] = useState('');
+  const [shiftId2, setShiftId2] = useState('');
   const [selectedId, setSelectedId] = useState(null);
   const [message, setMessage] = useState('');
   const [msgType, setMsgType] = useState('info');
@@ -58,15 +61,23 @@ export default function TrackingPage() {
       params: {
         search: search || undefined,
         departmentId: departmentId || undefined,
+        shiftId: shiftId || undefined,
+        shiftId2: shiftId && shiftId2 ? shiftId2 : undefined,
       },
     });
     setBoard(liveRes.data);
     setNowMs(Date.now());
-  }, [search, departmentId]);
+  }, [search, departmentId, shiftId, shiftId2]);
 
   useEffect(() => {
-    api.get('/departments')
-      .then((deptRes) => setDepartments(deptRes.data))
+    Promise.all([
+      api.get('/departments'),
+      api.get('/shifts'),
+    ])
+      .then(([deptRes, shiftRes]) => {
+        setDepartments(deptRes.data || []);
+        setShifts(shiftRes.data || []);
+      })
       .catch(() => { /* live board error handling covers UX */ });
   }, []);
 
@@ -117,6 +128,13 @@ export default function TrackingPage() {
     () => employeesView.find((e) => e.employeeId === selectedId) || null,
     [employeesView, selectedId],
   );
+
+  useEffect(() => {
+    if (!selectedId) return;
+    if (!employeesView.some((e) => e.employeeId === selectedId)) {
+      setSelectedId(null);
+    }
+  }, [employeesView, selectedId]);
 
   const capture = async (mode) => {
     if (!selectedId) {
@@ -197,7 +215,38 @@ export default function TrackingPage() {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
-        <select value={departmentId} onChange={(e) => setDepartmentId(e.target.value)}>
+        <select
+          value={shiftId}
+          onChange={(e) => {
+            const next = e.target.value;
+            setShiftId(next);
+            if (!next || next === shiftId2) setShiftId2('');
+          }}
+          aria-label="Primary shift"
+        >
+          <option value="">All shifts</option>
+          {shifts.map((s) => (
+            <option key={s.id} value={s.id}>{s.displayLabel || s.name}</option>
+          ))}
+        </select>
+        <select
+          value={shiftId2}
+          onChange={(e) => setShiftId2(e.target.value)}
+          disabled={!shiftId}
+          aria-label="Overlapping shift"
+          title={!shiftId ? 'Select a primary shift first' : 'Include employees from an overlapping shift'}
+        >
+          <option value="">No overlap</option>
+          {shifts.map((s) => {
+            const locked = String(s.id) === String(shiftId);
+            return (
+              <option key={s.id} value={s.id} disabled={locked}>
+                {locked ? `${s.displayLabel || s.name} (selected)` : (s.displayLabel || s.name)}
+              </option>
+            );
+          })}
+        </select>
+        <select value={departmentId} onChange={(e) => setDepartmentId(e.target.value)} aria-label="Filter by department">
           <option value="">All departments</option>
           {departments.map((d) => (
             <option key={d.id} value={d.id}>{d.name}</option>

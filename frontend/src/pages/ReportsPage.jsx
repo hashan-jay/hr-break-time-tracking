@@ -19,8 +19,10 @@ export default function ReportsPage() {
   const [to, setTo] = useState(todayIso());
   const [departmentId, setDepartmentId] = useState('');
   const [employeeId, setEmployeeId] = useState('');
+  const [shiftId, setShiftId] = useState('');
   const [departments, setDepartments] = useState([]);
   const [employees, setEmployees] = useState([]);
+  const [shifts, setShifts] = useState([]);
   const [report, setReport] = useState(null);
   const [message, setMessage] = useState('');
   const [msgType, setMsgType] = useState('info');
@@ -29,9 +31,11 @@ export default function ReportsPage() {
     Promise.all([
       api.get('/departments'),
       api.get('/employees'),
-    ]).then(([d, e]) => {
+      api.get('/shifts'),
+    ]).then(([d, e, s]) => {
       setDepartments(d.data);
       setEmployees(e.data);
+      setShifts(s.data);
     }).catch((err) => {
       setMsgType('error');
       setMessage(err.response?.data?.message || 'Failed to load filters.');
@@ -41,7 +45,10 @@ export default function ReportsPage() {
   const filters = useMemo(() => ({
     departmentName: departments.find((d) => String(d.id) === String(departmentId))?.name,
     employeeName: employees.find((e) => String(e.id) === String(employeeId))?.fullName,
-  }), [departments, employees, departmentId, employeeId]);
+    shiftName: shifts.find((s) => String(s.id) === String(shiftId))?.displayLabel
+      || report?.shiftDisplay
+      || report?.shiftName,
+  }), [departments, employees, shifts, departmentId, employeeId, shiftId, report]);
 
   const load = async () => {
     try {
@@ -49,9 +56,10 @@ export default function ReportsPage() {
       const { data } = await api.get(endpoint, {
         params: {
           from,
-          to,
+          to: to || from,
           departmentId: departmentId || undefined,
           employeeId: employeeId || undefined,
+          shiftId: shiftId || undefined,
         },
       });
       setReport(data);
@@ -69,12 +77,13 @@ export default function ReportsPage() {
 
   const exportCsv = () => {
     if (!report?.rows?.length) return;
-    const header = ['Date', 'Code', 'Employee', 'Department', 'Total', 'Seconds', 'Status', 'Breaks'];
+    const header = ['Date', 'Code', 'Employee', 'Department', 'Shift', 'Total', 'Seconds', 'Status', 'Breaks'];
     const lines = report.rows.map((r) => [
       r.date,
       r.employeeCode,
       `"${r.employeeName}"`,
       `"${r.departmentName}"`,
+      `"${r.shiftName || ''}"`,
       r.totalBreakDisplay,
       r.totalBreakSeconds,
       `"${r.status}"`,
@@ -84,7 +93,7 @@ export default function ReportsPage() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `break-report-${from}-to-${to}.csv`;
+    a.download = `break-report-${from}-to-${to || from}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -103,7 +112,7 @@ export default function ReportsPage() {
   const saveHtml = () => {
     if (!report) return;
     downloadHtmlReport(
-      `break-report-${from}-to-${to}.html`,
+      `break-report-${from}-to-${to || from}.html`,
       renderBreakReportHtml(report, filters),
     );
   };
@@ -113,7 +122,7 @@ export default function ReportsPage() {
       <header className="page-header no-print">
         <div>
           <h1>Reports</h1>
-          <p>Filter by date range, department, or employee. Print to A4 or save an HTML report file.</p>
+          <p>Filter by date, shift, department, or employee. Generate shift-wise compliance reports.</p>
         </div>
         <div className="header-actions">
           <button type="button" className="btn btn-ghost" onClick={exportCsv} disabled={!report?.rows?.length}>
@@ -132,12 +141,21 @@ export default function ReportsPage() {
 
       <div className="toolbar report-filters no-print">
         <label>
-          From
+          Start date
           <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
         </label>
         <label>
-          To
+          End date
           <input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+        </label>
+        <label>
+          Shift
+          <select value={shiftId} onChange={(e) => setShiftId(e.target.value)}>
+            <option value="">All shifts</option>
+            {shifts.map((s) => (
+              <option key={s.id} value={s.id}>{s.displayLabel}</option>
+            ))}
+          </select>
         </label>
         <label>
           Department
@@ -164,6 +182,9 @@ export default function ReportsPage() {
             <div className="stat-card tone-blue"><div className="stat-value">{report.satisfiedCount}</div><div className="stat-label">Satisfied</div></div>
             <div className="stat-card tone-red"><div className="stat-value">{report.exceededCount}</div><div className="stat-label">Exceeded</div></div>
           </div>
+          {(report.shiftDisplay || report.shiftName) && (
+            <p className="hint no-print">Shift filter: <strong>{report.shiftDisplay || report.shiftName}</strong></p>
+          )}
 
           <div className="table-wrap no-print">
             <table>
@@ -173,6 +194,7 @@ export default function ReportsPage() {
                   <th>Code</th>
                   <th>Employee</th>
                   <th>Department</th>
+                  <th>Shift</th>
                   <th>Total</th>
                   <th>Breaks</th>
                   <th>Status</th>
@@ -185,19 +207,19 @@ export default function ReportsPage() {
                     <td>{r.employeeCode}</td>
                     <td>{r.employeeName}</td>
                     <td>{r.departmentName}</td>
+                    <td>{r.shiftName || '—'}</td>
                     <td>{r.totalBreakDisplay}</td>
                     <td>{r.breakCount}</td>
                     <td><StatusBadge status={r.status} color={r.statusColor} /></td>
                   </tr>
                 ))}
                 {!report.rows.length && (
-                  <tr><td colSpan={7} className="empty">No records for the selected filters.</td></tr>
+                  <tr><td colSpan={8} className="empty">No records for the selected filters.</td></tr>
                 )}
               </tbody>
             </table>
           </div>
 
-          {/* Off-screen A4 source (shown only while printing) — RoarFitnessERP pattern */}
           <div className="break-report-print-source print-only" aria-hidden="true">
             <BreakReportDocument report={report} filters={filters} />
           </div>

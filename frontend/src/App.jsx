@@ -7,6 +7,7 @@ import TrackingPage from './pages/TrackingPage';
 import EmployeesPage from './pages/EmployeesPage';
 import DepartmentsPage from './pages/DepartmentsPage';
 import ReportsPage from './pages/ReportsPage';
+import ShiftsPage from './pages/ShiftsPage';
 import UsersPage from './pages/UsersPage';
 import SettingsPage from './pages/SettingsPage';
 import AuditPage from './pages/AuditPage';
@@ -40,6 +41,7 @@ function AppRoutes() {
             <Route path="departments" element={<DepartmentsPage />} />
           </Route>
           <Route element={<ProtectedRoute allow={['Developer']} />}>
+            <Route path="shifts" element={<ShiftsPage />} />
             <Route path="users" element={<UsersPage />} />
             <Route path="settings" element={<SettingsPage />} />
             <Route path="audit" element={<AuditPage />} />

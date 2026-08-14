@@ -44,8 +44,8 @@ builder.Services.AddSwaggerGen(options =>
 
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
     ?? throw new InvalidOperationException(
-        "ConnectionStrings:DefaultConnection is required. Use the local SQL Server default instance, for example: " +
-        "Server=localhost;Database=HRBreakTimeTracking;Trusted_Connection=True;MultipleActiveResultSets=True;Encrypt=True;TrustServerCertificate=True");
+        "ConnectionStrings:DefaultConnection is required. Use the local SQL Server Express instance, for example: " +
+        "Server=localhost\\SQLEXPRESS;Database=HRBreakTimeTracking;Trusted_Connection=True;MultipleActiveResultSets=True;Encrypt=True;TrustServerCertificate=True");
 
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlServer(connectionString, sql =>
@@ -99,7 +99,14 @@ builder.Services.AddCors(options =>
     options.AddPolicy("Frontend", policy =>
     {
         var origins = builder.Configuration.GetSection("Cors:Origins").Get<string[]>()
-            ?? ["http://localhost:5173", "http://127.0.0.1:5173"];
+            ?? [
+                "http://localhost:5173",
+                "http://127.0.0.1:5173",
+                "http://localhost:5174",
+                "http://127.0.0.1:5174",
+                "http://localhost:5175",
+                "http://127.0.0.1:5175"
+            ];
         policy.WithOrigins(origins)
             .AllowAnyHeader()
             .AllowAnyMethod();
@@ -111,6 +118,7 @@ builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IDepartmentService, DepartmentService>();
 builder.Services.AddScoped<IEmployeeService, EmployeeService>();
+builder.Services.AddScoped<IShiftService, ShiftService>();
 builder.Services.AddScoped<ISettingsService, SettingsService>();
 builder.Services.AddScoped<IBreakTrackingService, BreakTrackingService>();
 builder.Services.AddScoped<IReportService, ReportService>();
@@ -139,8 +147,8 @@ catch (Exception ex)
 {
     var logger = app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("Startup");
     logger.LogError(ex,
-        "Database migration or seed failed. Confirm the SQL Server (MSSQLSERVER) service is running and " +
-        "ConnectionStrings:DefaultConnection points at the default instance (Server=localhost), not SQLEXPRESS or LocalDB.");
+        "Database migration or seed failed. Confirm SQL Server (SQLEXPRESS) is running and " +
+        "ConnectionStrings:DefaultConnection points at Server=localhost\\SQLEXPRESS;Database=HRBreakTimeTracking.");
     throw;
 }
 

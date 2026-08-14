@@ -31,12 +31,13 @@ public class ReportsController : ControllerBase
         [FromQuery] string? from = null,
         [FromQuery] string? to = null,
         [FromQuery] int? departmentId = null,
-        [FromQuery] int? employeeId = null)
+        [FromQuery] int? employeeId = null,
+        [FromQuery] int? shiftId = null)
     {
         var fromDate = DateOnly.TryParse(from, out var f) ? f : DateOnly.FromDateTime(DateTime.Now);
         var toDate = DateOnly.TryParse(to, out var t) ? t : fromDate;
 
-        var report = await _reportService.GetReportAsync(fromDate, toDate, departmentId, employeeId);
+        var report = await _reportService.GetReportAsync(fromDate, toDate, departmentId, employeeId, shiftId);
         return Ok(report);
     }
 
@@ -47,12 +48,13 @@ public class ReportsController : ControllerBase
         [FromQuery] string? from = null,
         [FromQuery] string? to = null,
         [FromQuery] int? departmentId = null,
-        [FromQuery] int? employeeId = null)
+        [FromQuery] int? employeeId = null,
+        [FromQuery] int? shiftId = null)
     {
         var fromDate = DateOnly.TryParse(from, out var f) ? f : DateOnly.FromDateTime(DateTime.Now);
         var toDate = DateOnly.TryParse(to, out var t) ? t : fromDate;
 
-        var report = await _reportService.GetReportAsync(fromDate, toDate, departmentId, employeeId);
+        var report = await _reportService.GetReportAsync(fromDate, toDate, departmentId, employeeId, shiftId);
         return Ok(report);
     }
 }

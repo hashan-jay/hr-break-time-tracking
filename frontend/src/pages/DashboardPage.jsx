@@ -43,12 +43,6 @@ const KPI_ICONS = {
       <path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" />
     </svg>
   ),
-  list: (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden="true">
-      <path d="M8 6h11M8 12h11M8 18h11" />
-      <path d="M4 6h.01M4 12h.01M4 18h.01" />
-    </svg>
-  ),
 };
 
 function KpiCard({ label, value, icon, tone }) {
@@ -153,7 +147,6 @@ export default function DashboardPage() {
             <KpiCard label="Well satisfied" value={data.wellSatisfiedToday} icon={KPI_ICONS.check} tone="emerald" />
             <KpiCard label="Satisfied" value={data.satisfiedToday} icon={KPI_ICONS.equal} tone="sky" />
             <KpiCard label="Exceeded limit" value={data.exceededToday} icon={KPI_ICONS.alert} tone="rose" />
-            <KpiCard label="Break sessions today" value={data.totalBreaksToday} icon={KPI_ICONS.list} tone="teal" />
           </section>
 
           <section className="portal-quick-section">

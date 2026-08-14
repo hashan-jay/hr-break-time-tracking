@@ -160,13 +160,21 @@ public class EmployeeService : IEmployeeService
         e.FullName,
         e.DepartmentId,
         e.Department.Name,
+        e.ShiftId,
+        e.Shift?.Name,
+        e.Shift is null
+            ? null
+            : ShiftService.BuildDisplayLabel(e.Shift.Name, e.Shift.StartTime, e.Shift.EndTime, e.Shift.SpansNextDay),
         e.IsDeleted,
         e.DeletedAt,
         e.HireDate);
 
     public async Task<IReadOnlyList<EmployeeDto>> GetAllAsync(string? search = null, int? departmentId = null)
     {
-        var query = _db.Employees.AsNoTracking().Include(e => e.Department).Where(e => !e.IsDeleted);
+        var query = _db.Employees.AsNoTracking()
+            .Include(e => e.Department)
+            .Include(e => e.Shift)
+            .Where(e => !e.IsDeleted);
         if (departmentId.HasValue) query = query.Where(e => e.DepartmentId == departmentId.Value);
         if (!string.IsNullOrWhiteSpace(search))
         {
@@ -174,7 +182,8 @@ public class EmployeeService : IEmployeeService
             query = query.Where(e =>
                 e.FullName.ToLower().Contains(term) ||
                 e.EmployeeCode.ToLower().Contains(term) ||
-                e.Department.Name.ToLower().Contains(term));
+                e.Department.Name.ToLower().Contains(term) ||
+                (e.Shift != null && e.Shift.Name.ToLower().Contains(term)));
         }
 
         var list = await query
@@ -185,7 +194,9 @@ public class EmployeeService : IEmployeeService
 
     public async Task<EmployeeDto?> GetByIdAsync(int id)
     {
-        var e = await _db.Employees.AsNoTracking().Include(x => x.Department)
+        var e = await _db.Employees.AsNoTracking()
+            .Include(x => x.Department)
+            .Include(x => x.Shift)
             .FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted);
         return e is null ? null : Map(e);
     }
@@ -199,11 +210,15 @@ public class EmployeeService : IEmployeeService
         var dept = await _db.Departments.FirstOrDefaultAsync(d => d.Id == request.DepartmentId && !d.IsDeleted);
         if (dept is null) return (false, "Department not found.", null);
 
+        var shiftError = await ValidateShiftAsync(request.ShiftId);
+        if (shiftError is not null) return (false, shiftError, null);
+
         var entity = new Employee
         {
             EmployeeCode = code,
             FullName = request.FullName.Trim(),
             DepartmentId = request.DepartmentId,
+            ShiftId = request.ShiftId,
             HireDate = DateTime.UtcNow,
             CreatedAt = DateTime.UtcNow
         };
@@ -222,13 +237,26 @@ public class EmployeeService : IEmployeeService
         var deptExists = await _db.Departments.AnyAsync(d => d.Id == request.DepartmentId && !d.IsDeleted);
         if (!deptExists) return (false, "Department not found.", null);
 
+        var shiftError = await ValidateShiftAsync(request.ShiftId);
+        if (shiftError is not null) return (false, shiftError, null);
+
         entity.FullName = request.FullName.Trim();
         entity.DepartmentId = request.DepartmentId;
+        entity.ShiftId = request.ShiftId;
         entity.HireDate = request.HireDate;
         entity.UpdatedAt = DateTime.UtcNow;
         await _db.SaveChangesAsync();
         await _audit.LogAsync(userId, "Update", "Employee", entity.Id.ToString(), $"Updated employee '{entity.FullName}'.");
         return (true, null, await GetByIdAsync(entity.Id));
+    }
+
+    private async Task<string?> ValidateShiftAsync(int? shiftId)
+    {
+        if (!shiftId.HasValue) return null;
+        var shift = await _db.Shifts.AsNoTracking().FirstOrDefaultAsync(s => s.Id == shiftId.Value);
+        if (shift is null) return "Shift not found.";
+        if (!shift.IsActive) return "Selected shift is inactive. Choose an active shift.";
+        return null;
     }
 
     public async Task<(bool Ok, string? Error)> DeleteAsync(int id, string? userId)

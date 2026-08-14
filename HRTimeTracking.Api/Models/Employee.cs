@@ -16,6 +16,11 @@ public class Employee
 
     public Department Department { get; set; } = null!;
 
+    /// <summary>Optional shift assignment. Null preserves existing employees without a shift.</summary>
+    public int? ShiftId { get; set; }
+
+    public Shift? Shift { get; set; }
+
     public bool IsDeleted { get; set; }
 
     public DateTime? DeletedAt { get; set; }

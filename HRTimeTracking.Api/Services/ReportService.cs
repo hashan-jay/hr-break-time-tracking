@@ -8,7 +8,7 @@ namespace HRTimeTracking.Api.Services;
 public interface IReportService
 {
     Task<DashboardDto> GetDashboardAsync();
-    Task<ReportSummaryDto> GetReportAsync(DateOnly from, DateOnly to, int? departmentId, int? employeeId);
+    Task<ReportSummaryDto> GetReportAsync(DateOnly from, DateOnly to, int? departmentId, int? employeeId, int? shiftId);
 }
 
 public class ReportService : IReportService
@@ -40,19 +40,34 @@ public class ReportService : IReportService
             totalBreaksToday);
     }
 
-    public async Task<ReportSummaryDto> GetReportAsync(DateOnly from, DateOnly to, int? departmentId, int? employeeId)
+    public async Task<ReportSummaryDto> GetReportAsync(DateOnly from, DateOnly to, int? departmentId, int? employeeId, int? shiftId)
     {
         if (to < from) (from, to) = (to, from);
         var limitMinutes = await _settings.GetDailyLimitMinutesAsync();
 
+        string? shiftName = null;
+        string? shiftDisplay = null;
+        if (shiftId.HasValue)
+        {
+            var shift = await _db.Shifts.AsNoTracking().FirstOrDefaultAsync(s => s.Id == shiftId.Value);
+            if (shift is not null)
+            {
+                shiftName = shift.Name;
+                shiftDisplay = ShiftService.BuildDisplayLabel(shift.Name, shift.StartTime, shift.EndTime, shift.SpansNextDay);
+            }
+        }
+
         var sessionsQuery = _db.BreakSessions.AsNoTracking()
             .Include(b => b.Employee).ThenInclude(e => e.Department)
+            .Include(b => b.Employee).ThenInclude(e => e.Shift)
             .Where(b => b.BreakDate >= from && b.BreakDate <= to && !b.Employee.IsDeleted);
 
         if (departmentId.HasValue)
             sessionsQuery = sessionsQuery.Where(b => b.Employee.DepartmentId == departmentId.Value);
         if (employeeId.HasValue)
             sessionsQuery = sessionsQuery.Where(b => b.EmployeeId == employeeId.Value);
+        if (shiftId.HasValue)
+            sessionsQuery = sessionsQuery.Where(b => b.Employee.ShiftId == shiftId.Value);
 
         var sessions = await sessionsQuery.ToListAsync();
         foreach (var session in sessions)
@@ -64,11 +79,17 @@ public class ReportService : IReportService
         var now = TimeDisplay.NowLocal();
 
         var groups = sessions
-            .GroupBy(s => new { s.EmployeeId, s.BreakDate, s.Employee.EmployeeCode, s.Employee.FullName, Dept = s.Employee.Department.Name })
+            .GroupBy(s => new
+            {
+                s.EmployeeId,
+                s.BreakDate,
+                s.Employee.EmployeeCode,
+                s.Employee.FullName,
+                Dept = s.Employee.Department.Name,
+                ShiftName = s.Employee.Shift != null ? s.Employee.Shift.Name : null
+            })
             .Select(g =>
             {
-                // For past days, open sessions should not inflate totals with "now".
-                // Use in-time if closed; if somehow still open on a past date, count until end of that local day.
                 var dayEnd = g.Key.BreakDate == TimeDisplay.TodayLocal()
                     ? now
                     : g.Key.BreakDate.ToDateTime(new TimeOnly(23, 59, 59), DateTimeKind.Local);
@@ -79,6 +100,7 @@ public class ReportService : IReportService
                     g.Key.EmployeeCode,
                     g.Key.FullName,
                     g.Key.Dept,
+                    g.Key.ShiftName,
                     g.Key.BreakDate,
                     total,
                     TimeDisplay.FormatSeconds(total),
@@ -98,6 +120,9 @@ public class ReportService : IReportService
             groups.Count(r => r.Status == BreakStatusCodes.WellSatisfied),
             groups.Count(r => r.Status == BreakStatusCodes.Satisfied),
             groups.Count(r => r.Status == BreakStatusCodes.Exceeded),
+            shiftId,
+            shiftName,
+            shiftDisplay,
             groups);
     }
 }

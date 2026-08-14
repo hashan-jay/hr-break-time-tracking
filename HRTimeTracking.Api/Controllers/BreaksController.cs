@@ -20,8 +20,12 @@ public class BreaksController : ControllerBase
 
     [HttpGet("live")]
     [Authorize(Roles = $"{AppRoles.Developer},{AppRoles.HRManager},{AppRoles.HRAssistant}")]
-    public async Task<ActionResult<LiveBoardDto>> Live([FromQuery] string? search = null, [FromQuery] int? departmentId = null)
-        => Ok(await _service.GetLiveBoardAsync(search, departmentId));
+    public async Task<ActionResult<LiveBoardDto>> Live(
+        [FromQuery] string? search = null,
+        [FromQuery] int? departmentId = null,
+        [FromQuery] int? shiftId = null,
+        [FromQuery] int? shiftId2 = null)
+        => Ok(await _service.GetLiveBoardAsync(search, departmentId, shiftId, shiftId2));
 
     [HttpGet("employee/{employeeId:int}/status")]
     [Authorize(Roles = $"{AppRoles.Developer},{AppRoles.HRManager},{AppRoles.HRAssistant}")]
