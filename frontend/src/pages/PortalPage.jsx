@@ -6,9 +6,12 @@ import PortalClock from '../components/PortalClock';
 import { MessageBar, StatusBadge } from '../components/UiBits';
 import {
   BREAK_TYPES,
+  canSelectForCapture,
   enrichEmployeesLive,
   formatElapsed,
   formatLocalClock,
+  isOffShift,
+  offShiftReason,
   typeFields,
 } from '../lib/breakHelpers';
 
@@ -27,6 +30,8 @@ function PortalBreakSection({
   const fields = selected ? typeFields(selected, breakType) : null;
   const onThisBreak = fields?.isOnThisBreak;
   const blockedByOther = selected?.isOnBreak && !onThisBreak;
+  const offShift = selected ? isOffShift(selected) : false;
+  const captureLocked = Boolean(blockedByOther || (offShift && !onThisBreak));
 
   return (
     <section className={`portal-break-section portal-break-section--${breakType.toLowerCase()}`}>
@@ -59,6 +64,13 @@ function PortalBreakSection({
                 {employees.map((e) => {
                   const row = typeFields(e, breakType);
                   const blocked = row.blockedByOther;
+                  const offShift = isOffShift(e);
+                  const selectable = canSelectForCapture(e, breakType);
+                  const lockReason = blocked
+                    ? `On ${e.currentBreakType} break — end that first`
+                    : offShift
+                      ? offShiftReason(e)
+                      : undefined;
                   return (
                     <tr
                       key={`${breakType}-${e.employeeId}`}
@@ -66,11 +78,12 @@ function PortalBreakSection({
                         selectedId === e.employeeId ? 'selected' : '',
                         row.isOnThisBreak ? 'on-break' : '',
                         blocked ? 'on-other-break' : '',
+                        offShift && !row.isOnThisBreak ? 'off-shift' : '',
                       ].filter(Boolean).join(' ')}
-                      aria-disabled={blocked ? 'true' : undefined}
-                      title={blocked ? `On ${e.currentBreakType} break — end that first` : undefined}
+                      aria-disabled={selectable ? undefined : 'true'}
+                      title={lockReason}
                       onClick={() => {
-                        if (!blocked) onSelect(e.employeeId);
+                        if (selectable) onSelect(e.employeeId);
                       }}
                     >
                       <td className="col-code">{e.employeeCode}</td>
@@ -85,9 +98,9 @@ function PortalBreakSection({
                           ? `On break (${formatElapsed(e.currentBreakElapsedSeconds)})`
                           : blocked
                             ? `On ${e.currentBreakType}`
-                          : e.isWithinShift === false
-                            ? 'Off shift'
-                            : 'In office'}
+                            : offShift
+                              ? 'Off shift'
+                              : 'In office'}
                       </td>
                     </tr>
                   );
@@ -115,14 +128,16 @@ function PortalBreakSection({
                       ? `Out since ${formatLocalClock(selected.currentOutTime)}`
                       : blockedByOther
                         ? `On ${selected.currentBreakType} break — end that first`
-                        : `Ready to start ${breakType.toLowerCase()} break`}
+                        : offShift
+                          ? offShiftReason(selected)
+                          : `Ready to start ${breakType.toLowerCase()} break`}
                   </div>
                 </div>
               </div>
               <button
                 type="button"
                 className={`btn ${onThisBreak ? 'btn-in' : 'btn-out'} btn-xl`}
-                disabled={busy || apiOnline === false || blockedByOther}
+                disabled={busy || apiOnline === false || captureLocked}
                 onClick={() => onToggle(breakType)}
               >
                 {onThisBreak
@@ -230,10 +245,10 @@ export default function PortalPage() {
     if (!board) return;
     const mealEmp = employeesView.find((e) => e.employeeId === selectedMealId);
     const comfortEmp = employeesView.find((e) => e.employeeId === selectedComfortId);
-    if (selectedMealId && (!mealEmp || typeFields(mealEmp, BREAK_TYPES.MEAL).blockedByOther)) {
+    if (selectedMealId && (!mealEmp || !canSelectForCapture(mealEmp, BREAK_TYPES.MEAL))) {
       setSelectedMealId(null);
     }
-    if (selectedComfortId && (!comfortEmp || typeFields(comfortEmp, BREAK_TYPES.COMFORT).blockedByOther)) {
+    if (selectedComfortId && (!comfortEmp || !canSelectForCapture(comfortEmp, BREAK_TYPES.COMFORT))) {
       setSelectedComfortId(null);
     }
   }, [board, employeesView, selectedMealId, selectedComfortId]);
@@ -249,6 +264,14 @@ export default function PortalPage() {
     if (!employeeId) {
       setMsgType('error');
       setMessage('Select your name from the list first.');
+      return;
+    }
+    const employee = employeesView.find((e) => e.employeeId === employeeId);
+    if (employee && !canSelectForCapture(employee, breakType)) {
+      setMsgType('error');
+      setMessage(isOffShift(employee)
+        ? offShiftReason(employee)
+        : `On ${employee.currentBreakType} break — end that first.`);
       return;
     }
     busyRef.current = true;
@@ -270,7 +293,7 @@ export default function PortalPage() {
       busyRef.current = false;
       setBusy(false);
     }
-  }, [apiOnline, selectedMealId, selectedComfortId, loadBoard]);
+  }, [apiOnline, selectedMealId, selectedComfortId, loadBoard, employeesView]);
 
   useEffect(() => {
     const onKey = (e) => {
@@ -390,7 +413,7 @@ export default function PortalPage() {
         <p className="hint">
           {board?.periodLabel
             ? `Shift window: ${board.periodLabel}`
-            : 'This shift totals run only while the shift is live (for example 20:00–08:00). They reset when the shift ends, before the next one starts.'}
+            : 'All shifts: only employees whose shift is live at this local time can start or end a break. Everyone else is greyed out until their shift starts.'}
         </p>
 
         <div className="break-type-stack">

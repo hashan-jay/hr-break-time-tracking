@@ -64,7 +64,7 @@ export function shiftTotalSeconds(employee, breakType, nowMs) {
 
 /** Recompute open-session elapsed against Meal or Comfort totals every tick. */
 export function enrichEmployeesLive(list, nowMs, limits = {}) {
-  return (list || []).map((e) => {
+  const rows = (list || []).map((e) => {
     const mealTotal = shiftTotalSeconds(e, BREAK_TYPES.MEAL, nowMs);
     const comfortTotal = shiftTotalSeconds(e, BREAK_TYPES.COMFORT, nowMs);
     const mealStatus = statusFromTotal(mealTotal, limits.mealLimitMinutes);
@@ -83,6 +83,33 @@ export function enrichEmployeesLive(list, nowMs, limits = {}) {
       comfortStatusColor: comfortStatus.statusColor,
     };
   });
+
+  return rows.sort((a, b) => {
+    const aLive = a.isWithinShift === false ? 1 : 0;
+    const bLive = b.isWithinShift === false ? 1 : 0;
+    if (aLive !== bLive) return aLive - bLive;
+    return String(a.fullName || '').localeCompare(String(b.fullName || ''));
+  });
+}
+
+export function isOffShift(employee) {
+  return employee?.isWithinShift === false;
+}
+
+export function offShiftReason(employee) {
+  const shift = employee?.shiftDisplay || employee?.shiftName || 'This shift';
+  const next = formatLocalClock(employee?.nextShiftStart);
+  if (next && next !== '—') return `${shift} is not live until ${next.slice(0, 5)}`;
+  if (!employee?.shiftName) return 'No shift assigned — cannot capture breaks';
+  return `${shift} is not live at the current local time`;
+}
+
+export function canSelectForCapture(employee, breakType) {
+  const fields = typeFields(employee, breakType);
+  if (fields.isOnThisBreak) return true;
+  if (fields.blockedByOther) return false;
+  if (isOffShift(employee)) return false;
+  return true;
 }
 
 export function typeFields(employee, breakType) {

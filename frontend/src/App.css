@@ -826,7 +826,9 @@ td.is-live-total strong {
 }
 
 .portal-board__table tbody tr.on-other-break,
-.break-type-board tbody tr.on-other-break {
+.break-type-board tbody tr.on-other-break,
+.portal-board__table tbody tr.off-shift,
+.break-type-board tbody tr.off-shift {
   background: #f3f4f6;
   color: #9ca3af;
   cursor: not-allowed;
@@ -836,20 +838,30 @@ td.is-live-total strong {
 .portal-board__table tbody tr.on-other-break .col-name,
 .break-type-board tbody tr.on-other-break .col-name,
 .portal-board__table tbody tr.on-other-break td:nth-child(2),
-.break-type-board tbody tr.on-other-break td:nth-child(2) {
+.break-type-board tbody tr.on-other-break td:nth-child(2),
+.portal-board__table tbody tr.off-shift .col-name,
+.break-type-board tbody tr.off-shift .col-name,
+.portal-board__table tbody tr.off-shift td:nth-child(2),
+.break-type-board tbody tr.off-shift td:nth-child(2) {
   color: #9ca3af;
   font-weight: 600;
 }
 
 .portal-shell tbody tr.on-other-break:hover,
 .app-portal tbody tr.on-other-break:hover,
-tbody tr.on-other-break:hover {
+tbody tr.on-other-break:hover,
+.portal-shell tbody tr.off-shift:hover,
+.app-portal tbody tr.off-shift:hover,
+tbody tr.off-shift:hover {
   background: #f3f4f6;
 }
 
 .portal-shell tbody tr.on-other-break.selected,
 .app-portal tbody tr.on-other-break.selected,
-tbody tr.on-other-break.selected {
+tbody tr.on-other-break.selected,
+.portal-shell tbody tr.off-shift.selected,
+.app-portal tbody tr.off-shift.selected,
+tbody tr.off-shift.selected {
   background: #f3f4f6;
 }
 

@@ -193,13 +193,15 @@ public class BreakTrackingService : IBreakTrackingService
         }
 
         var now = TimeDisplay.NowLocal();
-        var period = ShiftWindow.ActiveAt(employee.Shift, now) ?? ShiftWindow.CalendarDay(now);
+        var period = ShiftWindow.ActiveAt(employee.Shift, now);
+        if (period is null)
+            return (false, "This employee is not on a live shift right now. Breaks can only be started during their shift hours.", null);
         var session = new BreakSession
         {
             EmployeeId = employeeId,
             BreakType = type,
             OutTime = now,
-            BreakDate = period.StartDate,
+            BreakDate = period.Value.StartDate,
             RecordedByUserId = userId,
             CreatedAt = now
         };
@@ -366,6 +368,15 @@ public class BreakTrackingService : IBreakTrackingService
             openOut is null ? null : openSeconds,
             comfortClosed,
             mealClosed,
-            withinShift);
+            withinShift,
+            employee.Shift?.Name,
+            employee.Shift is null
+                ? null
+                : ShiftService.BuildDisplayLabel(
+                    employee.Shift.Name,
+                    employee.Shift.StartTime,
+                    employee.Shift.EndTime,
+                    employee.Shift.SpansNextDay),
+            withinShift ? null : ShiftWindow.NextStart(employee.Shift, localNow));
     }
 }

@@ -33,14 +33,13 @@ public static class ShiftWindow
 
     /// <summary>
     /// The shift window that is live at this instant. Returns null between shifts
-    /// so This-shift totals reset before the next shift starts.
-    /// Employees with no shift assigned use the local calendar day.
+    /// and when the employee has no shift, so only current-shift staff can capture breaks.
     /// </summary>
     public static ShiftPeriod? ActiveAt(Shift? shift, DateTime now)
     {
         now = TimeDisplay.AsLocal(now);
         if (shift is null)
-            return CalendarDay(now);
+            return null;
 
         var date = DateOnly.FromDateTime(now);
 
@@ -83,10 +82,11 @@ public static class ShiftWindow
 
     /// <summary>
     /// Period a stored out-time belongs to for shift-strict reports.
-    /// Null when the employee has a shift but the out-time is between shifts.
+    /// Unassigned employees use the calendar day. Assigned employees only count
+    /// out-times that fall inside a live shift window.
     /// </summary>
     public static ShiftPeriod? ReportPeriod(Shift? shift, DateTime outTime)
-        => ActiveAt(shift, outTime);
+        => shift is null ? CalendarDay(outTime) : ActiveAt(shift, outTime);
 
     /// <summary>
     /// Current (or most recently started) period. Prefer <see cref="ActiveAt"/> for live totals.

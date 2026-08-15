@@ -228,7 +228,13 @@ export default function DashboardPage() {
                       const meal = typeFields(e, BREAK_TYPES.MEAL);
                       const comfort = typeFields(e, BREAK_TYPES.COMFORT);
                       return (
-                        <tr key={e.employeeId} className={e.isOnBreak ? 'on-break' : ''}>
+                        <tr
+                          key={e.employeeId}
+                          className={[
+                            e.isOnBreak ? 'on-break' : '',
+                            e.isWithinShift === false && !e.isOnBreak ? 'off-shift' : '',
+                          ].filter(Boolean).join(' ')}
+                        >
                           <td>{e.employeeCode}</td>
                           <td>{e.fullName}</td>
                           <td className={meal.isOnThisBreak ? 'is-live-total' : undefined}>

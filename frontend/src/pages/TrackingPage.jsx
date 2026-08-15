@@ -3,9 +3,12 @@ import api, { apiErrorMessage } from '../api/client';
 import { LoadingBlock, MessageBar, StatusBadge } from '../components/UiBits';
 import {
   BREAK_TYPES,
+  canSelectForCapture,
   enrichEmployeesLive,
   formatElapsed,
   formatLocalClock,
+  isOffShift,
+  offShiftReason,
   typeFields,
 } from '../lib/breakHelpers';
 
@@ -27,6 +30,8 @@ function BreakTypeBoard({
   const selectedFields = selected ? typeFields(selected, breakType) : null;
   const onThisBreak = selectedFields?.isOnThisBreak;
   const blockedByOther = selected?.isOnBreak && !onThisBreak;
+  const offShift = selected ? isOffShift(selected) : false;
+  const captureLocked = Boolean(blockedByOther || (offShift && !onThisBreak));
 
   return (
     <section className="break-type-board">
@@ -60,6 +65,13 @@ function BreakTypeBoard({
               {employees.map((e) => {
                 const fields = typeFields(e, breakType);
                 const blocked = fields.blockedByOther;
+                const offShift = isOffShift(e);
+                const selectable = canSelectForCapture(e, breakType);
+                const lockReason = blocked
+                  ? `On ${e.currentBreakType} break — end that first`
+                  : offShift
+                    ? offShiftReason(e)
+                    : undefined;
                 return (
                   <tr
                     key={`${breakType}-${e.employeeId}`}
@@ -67,11 +79,12 @@ function BreakTypeBoard({
                       selectedId === e.employeeId ? 'selected' : '',
                       fields.isOnThisBreak ? 'on-break' : '',
                       blocked ? 'on-other-break' : '',
+                      offShift && !fields.isOnThisBreak ? 'off-shift' : '',
                     ].filter(Boolean).join(' ')}
-                    aria-disabled={blocked ? 'true' : undefined}
-                    title={blocked ? `On ${e.currentBreakType} break — end that first` : undefined}
+                    aria-disabled={selectable ? undefined : 'true'}
+                    title={lockReason}
                     onClick={() => {
-                      if (!blocked) onSelect(e.employeeId);
+                      if (selectable) onSelect(e.employeeId);
                     }}
                   >
                     <td>{e.employeeCode}</td>
@@ -87,9 +100,9 @@ function BreakTypeBoard({
                         ? `On ${breakType.toLowerCase()} break (${formatElapsed(e.currentBreakElapsedSeconds)}) · out ${formatLocalClock(e.currentOutTime)}`
                         : blocked
                           ? `On ${e.currentBreakType} break`
-                          : e.isWithinShift === false
-                          ? 'Off shift'
-                          : 'In office'}
+                          : offShift
+                            ? 'Off shift'
+                            : 'In office'}
                     </td>
                   </tr>
                 );
@@ -119,14 +132,16 @@ function BreakTypeBoard({
                       ? `Out since ${formatLocalClock(selected.currentOutTime)} · open ${formatElapsed(selected.currentBreakElapsedSeconds)}`
                       : blockedByOther
                         ? `Currently on ${selected.currentBreakType} break — end that first`
-                        : 'Currently in office'}
+                        : offShift
+                          ? offShiftReason(selected)
+                          : 'Currently in office'}
                   </div>
                 </div>
               </div>
               <button
                 type="button"
                 className={`btn ${onThisBreak ? 'btn-in' : 'btn-out'} btn-xl`}
-                disabled={busy || blockedByOther}
+                disabled={busy || captureLocked}
                 onClick={() => onToggle(breakType)}
               >
                 {onThisBreak
@@ -137,7 +152,7 @@ function BreakTypeBoard({
                 <button
                   type="button"
                   className="btn btn-ghost"
-                  disabled={busy || selected.isOnBreak}
+                  disabled={busy || selected.isOnBreak || offShift}
                   onClick={() => onOut(breakType)}
                 >
                   Out only (O)
@@ -242,10 +257,10 @@ export default function TrackingPage() {
     if (!board) return;
     const mealEmp = employeesView.find((e) => e.employeeId === selectedMealId);
     const comfortEmp = employeesView.find((e) => e.employeeId === selectedComfortId);
-    if (selectedMealId && (!mealEmp || typeFields(mealEmp, BREAK_TYPES.MEAL).blockedByOther)) {
+    if (selectedMealId && (!mealEmp || !canSelectForCapture(mealEmp, BREAK_TYPES.MEAL))) {
       setSelectedMealId(null);
     }
-    if (selectedComfortId && (!comfortEmp || typeFields(comfortEmp, BREAK_TYPES.COMFORT).blockedByOther)) {
+    if (selectedComfortId && (!comfortEmp || !canSelectForCapture(comfortEmp, BREAK_TYPES.COMFORT))) {
       setSelectedComfortId(null);
     }
   }, [board, employeesView, selectedMealId, selectedComfortId]);
@@ -256,6 +271,14 @@ export default function TrackingPage() {
     if (!employeeId) {
       setMsgType('error');
       setMessage('Select an employee first.');
+      return;
+    }
+    const employee = employeesView.find((e) => e.employeeId === employeeId);
+    if (employee && !canSelectForCapture(employee, breakType) && mode !== 'in') {
+      setMsgType('error');
+      setMessage(isOffShift(employee)
+        ? offShiftReason(employee)
+        : `On ${employee.currentBreakType} break — end that first.`);
       return;
     }
     busyRef.current = true;
@@ -277,7 +300,7 @@ export default function TrackingPage() {
       busyRef.current = false;
       setBusy(false);
     }
-  }, [selectedMealId, selectedComfortId, load]);
+  }, [selectedMealId, selectedComfortId, load, employeesView]);
 
   useEffect(() => {
     const onKey = (e) => {
@@ -308,10 +331,8 @@ export default function TrackingPage() {
         <div>
           <h1>Live Tracking</h1>
           <p>
-            Capture Meal Break and Comfort Break separately. This shift totals reset when the
-            current shift ends, before the next shift starts. Overnight 20:00–08:00 stays one
-            period. Select an employee in a section, then press{' '}
-            <kbd>Enter</kbd> / <kbd>Space</kbd> to toggle. Times use this PC&apos;s local clock.
+            Capture Meal Break and Comfort Break separately. On All shifts, only staff whose
+            shift is live at this local time can start or end a break; others are greyed out.
           </p>
         </div>
         <div className="header-stats">

@@ -139,7 +139,10 @@ public record EmployeeBreakStatusDto(
     int? CurrentBreakElapsedSeconds,
     int ComfortClosedSeconds = 0,
     int MealClosedSeconds = 0,
-    bool IsWithinShift = true)
+    bool IsWithinShift = true,
+    string? ShiftName = null,
+    string? ShiftDisplay = null,
+    DateTime? NextShiftStart = null)
 {
     public bool IsOnComfortBreak => IsOnBreak && CurrentBreakType == BreakTypes.Comfort;
     public bool IsOnMealBreak => IsOnBreak && CurrentBreakType == BreakTypes.Meal;
