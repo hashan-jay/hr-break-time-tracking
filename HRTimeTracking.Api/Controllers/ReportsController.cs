@@ -30,14 +30,16 @@ public class ReportsController : ControllerBase
     public async Task<ActionResult<ReportSummaryDto>> Breaks(
         [FromQuery] string? from = null,
         [FromQuery] string? to = null,
-        [FromQuery] int? departmentId = null,
-        [FromQuery] int? employeeId = null,
-        [FromQuery] int? shiftId = null)
+        [FromQuery] string? fromDate = null,
+        [FromQuery] string? toDate = null,
+        [FromQuery] string? departmentId = null,
+        [FromQuery] string? employeeId = null,
+        [FromQuery] string? shiftId = null)
     {
-        var fromDate = DateOnly.TryParse(from, out var f) ? f : DateOnly.FromDateTime(DateTime.Now);
-        var toDate = DateOnly.TryParse(to, out var t) ? t : fromDate;
-
-        var report = await _reportService.GetReportAsync(fromDate, toDate, departmentId, employeeId, shiftId);
+        var start = ParseDate(fromDate) ?? ParseDate(from) ?? DateOnly.FromDateTime(DateTime.Now);
+        var end = ParseDate(toDate) ?? ParseDate(to) ?? start;
+        var report = await _reportService.GetReportAsync(
+            start, end, ParseId(departmentId), ParseId(employeeId), ParseId(shiftId));
         return Ok(report);
     }
 
@@ -47,14 +49,22 @@ public class ReportsController : ControllerBase
     public async Task<ActionResult<ReportSummaryDto>> BreaksView(
         [FromQuery] string? from = null,
         [FromQuery] string? to = null,
-        [FromQuery] int? departmentId = null,
-        [FromQuery] int? employeeId = null,
-        [FromQuery] int? shiftId = null)
+        [FromQuery] string? fromDate = null,
+        [FromQuery] string? toDate = null,
+        [FromQuery] string? departmentId = null,
+        [FromQuery] string? employeeId = null,
+        [FromQuery] string? shiftId = null)
     {
-        var fromDate = DateOnly.TryParse(from, out var f) ? f : DateOnly.FromDateTime(DateTime.Now);
-        var toDate = DateOnly.TryParse(to, out var t) ? t : fromDate;
-
-        var report = await _reportService.GetReportAsync(fromDate, toDate, departmentId, employeeId, shiftId);
+        var start = ParseDate(fromDate) ?? ParseDate(from) ?? DateOnly.FromDateTime(DateTime.Now);
+        var end = ParseDate(toDate) ?? ParseDate(to) ?? start;
+        var report = await _reportService.GetReportAsync(
+            start, end, ParseId(departmentId), ParseId(employeeId), ParseId(shiftId));
         return Ok(report);
     }
+
+    private static DateOnly? ParseDate(string? value)
+        => DateOnly.TryParse(value, out var date) ? date : null;
+
+    private static int? ParseId(string? value)
+        => int.TryParse(value, out var id) && id > 0 ? id : null;
 }

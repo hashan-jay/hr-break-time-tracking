@@ -50,17 +50,33 @@ public class ReportService : IReportService
         var comfortLimit = await _settings.GetComfortLimitMinutesAsync();
         var mealLimit = await _settings.GetMealLimitMinutesAsync();
 
+        Shift? selectedShift = null;
         string? shiftName = null;
         string? shiftDisplay = null;
         if (shiftId.HasValue)
         {
-            var shift = await _db.Shifts.AsNoTracking().FirstOrDefaultAsync(s => s.Id == shiftId.Value);
-            if (shift is not null)
+            selectedShift = await _db.Shifts.AsNoTracking().FirstOrDefaultAsync(s => s.Id == shiftId.Value);
+            if (selectedShift is not null)
             {
-                shiftName = shift.Name;
-                shiftDisplay = ShiftService.BuildDisplayLabel(shift.Name, shift.StartTime, shift.EndTime, shift.SpansNextDay);
+                shiftName = selectedShift.Name;
+                shiftDisplay = ShiftService.BuildDisplayLabel(
+                    selectedShift.Name, selectedShift.StartTime, selectedShift.EndTime, selectedShift.SpansNextDay);
             }
         }
+
+        var rosterQuery = _db.Employees.AsNoTracking()
+            .Include(e => e.Department)
+            .Include(e => e.Shift)
+            .Where(e => !e.IsDeleted);
+        if (departmentId.HasValue)
+            rosterQuery = rosterQuery.Where(e => e.DepartmentId == departmentId.Value);
+        if (employeeId.HasValue)
+            rosterQuery = rosterQuery.Where(e => e.Id == employeeId.Value);
+        if (shiftId.HasValue)
+            rosterQuery = rosterQuery.Where(e => e.ShiftId == shiftId.Value);
+
+        var filterToRoster = departmentId.HasValue || employeeId.HasValue || shiftId.HasValue;
+        var roster = await rosterQuery.OrderBy(e => e.FullName).ToListAsync();
 
         var fromStart = from.AddDays(-1).ToDateTime(TimeOnly.MinValue, DateTimeKind.Local);
         var toEnd = to.AddDays(2).ToDateTime(TimeOnly.MinValue, DateTimeKind.Local);
@@ -72,7 +88,6 @@ public class ReportService : IReportService
                         (b.InTime == null ||
                          (b.BreakDate >= from.AddDays(-1) && b.BreakDate <= to.AddDays(1)) ||
                          (b.OutTime >= fromStart && b.OutTime < toEnd)));
-
         if (departmentId.HasValue)
             sessionsQuery = sessionsQuery.Where(b => b.Employee.DepartmentId == departmentId.Value);
         if (employeeId.HasValue)
@@ -90,86 +105,111 @@ public class ReportService : IReportService
         }
 
         var now = TimeDisplay.NowLocal();
+        var periodLabel = from == to ? from.ToString("yyyy-MM-dd") : $"{from:yyyy-MM-dd} to {to:yyyy-MM-dd}";
+        var rangeStart = from.ToDateTime(TimeOnly.MinValue, DateTimeKind.Local);
+        var rangeEnd = to.AddDays(1).ToDateTime(TimeOnly.MinValue, DateTimeKind.Local);
 
-        var grouped = sessions
-            .Select(s =>
+        var inRange = new List<(BreakSession Session, ShiftPeriod Period)>();
+        foreach (var session in sessions)
+        {
+            var period = ShiftWindow.ReportPeriod(session.Employee.Shift, session.OutTime);
+            if (!period.HasValue) continue;
+            if (period.Value.StartDate < from || period.Value.StartDate > to) continue;
+            if (selectedShift is not null)
             {
-                var period = ShiftWindow.ReportPeriod(s.Employee.Shift, s.OutTime);
-                return new { Session = s, Period = period };
-            })
-            .Where(x => x.Period.HasValue &&
-                        x.Period.Value.StartDate >= from &&
-                        x.Period.Value.StartDate <= to)
-            .Select(x => new { x.Session, Period = x.Period!.Value })
-            .GroupBy(x => new
-            {
-                x.Session.EmployeeId,
-                PeriodStart = x.Period.Start,
-                PeriodEnd = x.Period.End,
-                x.Session.Employee.EmployeeCode,
-                x.Session.Employee.FullName,
-                Dept = x.Session.Employee.Department.Name,
-                ShiftName = x.Session.Employee.Shift != null ? x.Session.Employee.Shift.Name : null,
-                Shift = x.Session.Employee.Shift
-            });
+                var expected = ShiftWindow.StartingOn(selectedShift, period.Value.StartDate);
+                if (period.Value.Start != expected.Start || period.Value.End != expected.End)
+                    continue;
+            }
+            inRange.Add((session, period.Value));
+        }
 
-        var groups = grouped
-            .Select(g =>
-            {
-                var period = new ShiftPeriod(g.Key.PeriodStart, g.Key.PeriodEnd);
-                var reference = now < period.End ? now : period.End;
-                var periodSessions = g.Select(x => x.Session).ToList();
+        var sessionsByEmployee = inRange
+            .GroupBy(x => x.Session.EmployeeId)
+            .ToDictionary(g => g.Key, g => g.ToList());
 
-                var comfortSessions = periodSessions.Where(s =>
-                    BreakTypes.Comfort.Equals(string.IsNullOrWhiteSpace(s.BreakType) ? BreakTypes.Comfort : s.BreakType, StringComparison.OrdinalIgnoreCase)).ToList();
-                var mealSessions = periodSessions.Where(s =>
-                    BreakTypes.Meal.Equals(s.BreakType, StringComparison.OrdinalIgnoreCase)).ToList();
+        if (!filterToRoster)
+        {
+            roster = sessionsByEmployee.Keys
+                .Select(id => inRange.First(x => x.Session.EmployeeId == id).Session.Employee)
+                .DistinctBy(e => e.Id)
+                .OrderBy(e => e.FullName)
+                .ToList();
+        }
 
-                var comfortTotal = TimeDisplay.ComputeShiftTotalSeconds(comfortSessions, reference);
-                var mealTotal = TimeDisplay.ComputeShiftTotalSeconds(mealSessions, reference);
-                var (comfortStatus, comfortColor) = BreakStatusCodes.FromTotalSeconds(comfortTotal, comfortLimit);
-                var (mealStatus, mealColor) = BreakStatusCodes.FromTotalSeconds(mealTotal, mealLimit);
+        var rows = roster.Select(employee =>
+        {
+            var empItems = sessionsByEmployee.GetValueOrDefault(employee.Id) ?? [];
+            var meal = SumBreakType(empItems, BreakTypes.Meal, now, mealLimit);
+            var comfort = SumBreakType(empItems, BreakTypes.Comfort, now, comfortLimit);
 
-                return new ReportRowDto(
-                    g.Key.EmployeeId,
-                    g.Key.EmployeeCode,
-                    g.Key.FullName,
-                    g.Key.Dept,
-                    g.Key.ShiftName,
-                    period.StartDate,
-                    comfortTotal,
-                    TimeDisplay.FormatSeconds(comfortTotal),
-                    comfortStatus,
-                    comfortColor,
-                    comfortSessions.Count,
-                    mealTotal,
-                    TimeDisplay.FormatSeconds(mealTotal),
-                    mealStatus,
-                    mealColor,
-                    mealSessions.Count,
-                    period.Start,
-                    period.End,
-                    ShiftWindow.FormatLabel(g.Key.Shift, period));
-            })
-            .OrderBy(r => r.Date)
-            .ThenBy(r => r.EmployeeName)
-            .ToList();
+            return new ReportRowDto(
+                employee.Id,
+                employee.EmployeeCode,
+                employee.FullName,
+                employee.Department?.Name ?? "—",
+                employee.Shift?.Name,
+                from,
+                comfort.TotalSeconds,
+                TimeDisplay.FormatSeconds(comfort.TotalSeconds),
+                comfort.Exceeded ? BreakStatusCodes.Exceeded : BreakStatusCodes.WellSatisfied,
+                comfort.Exceeded ? BreakStatusCodes.ColorRed : BreakStatusCodes.ColorGreen,
+                comfort.Count,
+                meal.TotalSeconds,
+                TimeDisplay.FormatSeconds(meal.TotalSeconds),
+                meal.Exceeded ? BreakStatusCodes.Exceeded : BreakStatusCodes.WellSatisfied,
+                meal.Exceeded ? BreakStatusCodes.ColorRed : BreakStatusCodes.ColorGreen,
+                meal.Count,
+                rangeStart,
+                rangeEnd,
+                periodLabel);
+        })
+        .OrderBy(r => r.EmployeeName)
+        .ToList();
 
         return new ReportSummaryDto(
             from,
             to,
             comfortLimit,
             mealLimit,
-            groups.Count,
-            groups.Count(r => r.ComfortStatus == BreakStatusCodes.WellSatisfied),
+            rows.Count,
+            rows.Count(r => r.ComfortStatus == BreakStatusCodes.WellSatisfied),
             0,
-            groups.Count(r => r.ComfortStatus == BreakStatusCodes.Exceeded),
-            groups.Count(r => r.MealStatus == BreakStatusCodes.WellSatisfied),
+            rows.Count(r => r.ComfortStatus == BreakStatusCodes.Exceeded),
+            rows.Count(r => r.MealStatus == BreakStatusCodes.WellSatisfied),
             0,
-            groups.Count(r => r.MealStatus == BreakStatusCodes.Exceeded),
+            rows.Count(r => r.MealStatus == BreakStatusCodes.Exceeded),
             shiftId,
             shiftName,
             shiftDisplay,
-            groups);
+            rows);
+    }
+
+    private static (int TotalSeconds, int Count, bool Exceeded) SumBreakType(
+        IReadOnlyList<(BreakSession Session, ShiftPeriod Period)> items,
+        string breakType,
+        DateTime now,
+        int limitMinutes)
+    {
+        var typed = items.Where(x =>
+        {
+            var type = string.IsNullOrWhiteSpace(x.Session.BreakType) ? BreakTypes.Comfort : x.Session.BreakType;
+            return breakType.Equals(type, StringComparison.OrdinalIgnoreCase);
+        }).ToList();
+
+        var total = 0;
+        var exceeded = false;
+        foreach (var periodGroup in typed.GroupBy(x => (x.Period.Start, x.Period.End)))
+        {
+            var period = new ShiftPeriod(periodGroup.Key.Start, periodGroup.Key.End);
+            var reference = now < period.End ? now : period.End;
+            var seconds = TimeDisplay.ComputeShiftTotalSeconds(periodGroup.Select(x => x.Session), reference);
+            total += seconds;
+            var (status, _) = BreakStatusCodes.FromTotalSeconds(seconds, limitMinutes);
+            if (status == BreakStatusCodes.Exceeded)
+                exceeded = true;
+        }
+
+        return (total, typed.Count, exceeded);
     }
 }

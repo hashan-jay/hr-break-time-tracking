@@ -7,6 +7,10 @@ function statusClass(color) {
   return '';
 }
 
+function periodText(row) {
+  return row.periodLabel || row.date || '';
+}
+
 /**
  * A4 printable break-time report document (Meal + Comfort).
  */
@@ -22,7 +26,7 @@ export default function BreakReportDocument({ report, filters }) {
     <div className="break-report-document">
       <header className="break-report-document__header print-header">
         <h1>HR Break Time Tracking</h1>
-        <h2>Employee Shift-period Meal & Comfort Break Report</h2>
+        <h2>Employee Meal & Comfort Break Totals</h2>
         <p>Generated {generatedAt} (PC local time)</p>
       </header>
 
@@ -56,7 +60,7 @@ export default function BreakReportDocument({ report, filters }) {
           <strong>{report.comfortLimitMinutes} minutes</strong>
         </div>
         <div>
-          <span>Employee-shifts</span>
+          <span>Employees</span>
           <strong>{report.employeeDays}</strong>
         </div>
       </section>
@@ -81,25 +85,25 @@ export default function BreakReportDocument({ report, filters }) {
       </section>
 
       <section className="print-section">
-        <h3 className="break-report-document__section-title">Detailed break totals</h3>
+        <h3 className="break-report-document__section-title">Employee break totals</h3>
         <table className="break-report-document__table print-table">
           <thead>
             <tr>
-              <th>Shift start date</th>
+              <th>Period</th>
               <th>Code</th>
               <th>Employee</th>
               <th>Department</th>
               <th>Shift</th>
-              <th>Meal</th>
+              <th>Meal total</th>
               <th>Meal status</th>
-              <th>Comfort</th>
+              <th>Comfort total</th>
               <th>Comfort status</th>
             </tr>
           </thead>
           <tbody>
             {(report.rows || []).map((r) => (
-              <tr key={`${r.employeeId}-${r.date}`}>
-                <td>{r.date}{r.periodLabel ? ` · ${r.periodLabel}` : ''}</td>
+              <tr key={r.employeeId}>
+                <td>{periodText(r)}</td>
                 <td>{r.employeeCode}</td>
                 <td>{r.employeeName}</td>
                 <td>{r.departmentName}</td>
@@ -121,8 +125,8 @@ export default function BreakReportDocument({ report, filters }) {
 
       <footer className="break-report-document__footer">
         Meal limit: {report.mealLimitMinutes} min · Comfort limit: {report.comfortLimitMinutes} min.
-        Status rules: WELL SATISFIED (&lt;= X:00) · EXCEEDED BREAK TIME LIMIT (&gt; X:00).
-        Totals are calculated second-accurately from out-time / in-time records.
+        One row per employee. Totals are the Meal and Comfort time in the selected period.
+        Status is EXCEEDED if any shift in that period went over the limit.
       </footer>
     </div>
   );
@@ -135,7 +139,7 @@ export function renderBreakReportHtml(report, filters) {
   const shiftLabel = filters?.shiftName || report.shiftDisplay || report.shiftName || 'All shifts';
   const rows = (report.rows || [])
     .map((r) => `<tr>
-        <td>${r.date}${r.periodLabel ? ` · ${escapeHtml(r.periodLabel)}` : ''}</td>
+        <td>${escapeHtml(periodText(r))}</td>
         <td>${r.employeeCode}</td>
         <td>${escapeHtml(r.employeeName)}</td>
         <td>${escapeHtml(r.departmentName)}</td>
@@ -149,7 +153,7 @@ export function renderBreakReportHtml(report, filters) {
 
   return `
     <h1>HR Break Time Tracking</h1>
-    <h2>Employee Shift-period Meal & Comfort Break Report</h2>
+    <h2>Employee Meal & Comfort Break Totals</h2>
     <p>Generated ${escapeHtml(generatedAt)} (PC local time)</p>
     <div class="meta">
       <div><span>Shift start from</span><strong>${report.from}</strong></div>
@@ -159,7 +163,7 @@ export function renderBreakReportHtml(report, filters) {
       <div><span>Employee</span><strong>${escapeHtml(empLabel)}</strong></div>
       <div><span>Meal limit</span><strong>${report.mealLimitMinutes} minutes</strong></div>
       <div><span>Comfort limit</span><strong>${report.comfortLimitMinutes} minutes</strong></div>
-      <div><span>Employee-shifts</span><strong>${report.employeeDays}</strong></div>
+      <div><span>Employees</span><strong>${report.employeeDays}</strong></div>
     </div>
     <div class="kpis">
       <div class="kpi"><strong>${report.mealWellSatisfiedCount}</strong><span>Meal WELL SATISFIED</span></div>
@@ -170,8 +174,8 @@ export function renderBreakReportHtml(report, filters) {
     <table>
       <thead>
         <tr>
-          <th>Shift start date</th><th>Code</th><th>Employee</th><th>Department</th><th>Shift</th>
-          <th>Meal</th><th>Meal status</th><th>Comfort</th><th>Comfort status</th>
+          <th>Period</th><th>Code</th><th>Employee</th><th>Department</th><th>Shift</th>
+          <th>Meal total</th><th>Meal status</th><th>Comfort total</th><th>Comfort status</th>
         </tr>
       </thead>
       <tbody>
@@ -180,8 +184,8 @@ export function renderBreakReportHtml(report, filters) {
     </table>
     <div class="footer">
       Meal limit: ${report.mealLimitMinutes} min · Comfort limit: ${report.comfortLimitMinutes} min.
-      Status rules: WELL SATISFIED (&lt;= X:00) · EXCEEDED BREAK TIME LIMIT (&gt; X:00).
-      Totals are calculated second-accurately from out-time / in-time records.
+      One row per employee. Totals are the Meal and Comfort time in the selected period.
+      Status is EXCEEDED if any shift in that period went over the limit.
     </div>
   `;
 }

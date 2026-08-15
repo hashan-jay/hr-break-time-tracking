@@ -13,6 +13,17 @@ const todayIso = () => {
   return `${yyyy}-${mm}-${dd}`;
 };
 
+function entityId(item) {
+  const value = item?.id ?? item?.Id ?? item?.employeeId ?? item?.departmentId;
+  const n = Number(value);
+  return Number.isInteger(n) && n > 0 ? String(n) : '';
+}
+
+function queryId(value) {
+  const n = Number(value);
+  return Number.isInteger(n) && n > 0 ? n : undefined;
+}
+
 export default function ReportsPage() {
   const { isHRAssistant, canManageMasterData } = useAuth();
   const [from, setFrom] = useState(todayIso());
@@ -24,6 +35,7 @@ export default function ReportsPage() {
   const [employees, setEmployees] = useState([]);
   const [shifts, setShifts] = useState([]);
   const [report, setReport] = useState(null);
+  const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
   const [msgType, setMsgType] = useState('info');
 
@@ -33,33 +45,46 @@ export default function ReportsPage() {
       api.get('/employees'),
       api.get('/shifts'),
     ]).then(([d, e, s]) => {
-      setDepartments(d.data);
-      setEmployees(e.data);
-      setShifts(s.data);
+      setDepartments(d.data || []);
+      setEmployees(e.data || []);
+      setShifts(s.data || []);
     }).catch((err) => {
       setMsgType('error');
       setMessage(apiErrorMessage(err, 'Failed to load filters.'));
     });
   }, []);
 
+  const employeeOptions = useMemo(() => {
+    const dept = queryId(departmentId);
+    return (employees || []).filter((emp) => {
+      if (!dept) return true;
+      const empDept = Number(emp.departmentId ?? emp.DepartmentId);
+      return empDept === dept;
+    });
+  }, [employees, departmentId]);
+
   const filters = useMemo(() => ({
-    departmentName: departments.find((d) => String(d.id) === String(departmentId))?.name,
-    employeeName: employees.find((e) => String(e.id) === String(employeeId))?.fullName,
-    shiftName: shifts.find((s) => String(s.id) === String(shiftId))?.displayLabel
+    departmentName: departments.find((d) => entityId(d) === String(departmentId))?.name,
+    employeeName: employees.find((e) => entityId(e) === String(employeeId))?.fullName,
+    shiftName: shifts.find((s) => entityId(s) === String(shiftId))?.displayLabel
       || report?.shiftDisplay
       || report?.shiftName,
   }), [departments, employees, shifts, departmentId, employeeId, shiftId, report]);
 
-  const load = async () => {
+  const load = async (event) => {
+    event?.preventDefault?.();
+    setBusy(true);
     try {
       const endpoint = isHRAssistant && !canManageMasterData ? '/reports/breaks/view' : '/reports/breaks';
       const { data } = await api.get(endpoint, {
         params: {
           from,
           to: to || from,
-          departmentId: departmentId || undefined,
-          employeeId: employeeId || undefined,
-          shiftId: shiftId || undefined,
+          fromDate: from,
+          toDate: to || from,
+          departmentId: queryId(departmentId),
+          employeeId: queryId(employeeId),
+          shiftId: queryId(shiftId),
         },
       });
       setReport(data);
@@ -67,6 +92,8 @@ export default function ReportsPage() {
     } catch (err) {
       setMsgType('error');
       setMessage(apiErrorMessage(err, 'Failed to generate report.'));
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -78,25 +105,24 @@ export default function ReportsPage() {
   const exportCsv = () => {
     if (!report?.rows?.length) return;
     const header = [
-      'ShiftDate', 'Period', 'Code', 'Employee', 'Department', 'Shift',
-      'ComfortTotal', 'ComfortSeconds', 'ComfortStatus', 'ComfortBreaks',
+      'Period', 'Code', 'Employee', 'Department', 'Shift',
       'MealTotal', 'MealSeconds', 'MealStatus', 'MealBreaks',
+      'ComfortTotal', 'ComfortSeconds', 'ComfortStatus', 'ComfortBreaks',
     ];
     const lines = report.rows.map((r) => [
-      r.date,
-      `"${r.periodLabel || ''}"`,
+      `"${r.periodLabel || r.date || ''}"`,
       r.employeeCode,
       `"${r.employeeName}"`,
       `"${r.departmentName}"`,
       `"${r.shiftName || ''}"`,
-      r.comfortBreakDisplay,
-      r.comfortBreakSeconds,
-      `"${r.comfortStatus}"`,
-      r.comfortBreakCount,
       r.mealBreakDisplay,
       r.mealBreakSeconds,
       `"${r.mealStatus}"`,
       r.mealBreakCount,
+      r.comfortBreakDisplay,
+      r.comfortBreakSeconds,
+      `"${r.comfortStatus}"`,
+      r.comfortBreakCount,
     ].join(','));
     const blob = new Blob([[header.join(','), ...lines].join('\n')], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
@@ -132,9 +158,8 @@ export default function ReportsPage() {
         <div>
           <h1>Reports</h1>
           <p>
-            Filter by shift start date, shift, department, or employee. Each row is one shift
-            period only (a 20:00–08:00 night is dated by the day it started). Totals do not
-            carry into the next shift.
+            Choose shift start dates, shift, department, and/or employee, then Generate.
+            Each employee appears once with Meal and Comfort totals for the selected period.
           </p>
         </div>
         <div className="header-actions">
@@ -152,7 +177,7 @@ export default function ReportsPage() {
 
       <MessageBar message={message} type={msgType} onClose={() => setMessage('')} />
 
-      <div className="toolbar report-filters no-print">
+      <form className="toolbar report-filters no-print" onSubmit={load}>
         <label>
           Shift start from
           <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
@@ -165,27 +190,52 @@ export default function ReportsPage() {
           Shift
           <select value={shiftId} onChange={(e) => setShiftId(e.target.value)}>
             <option value="">All shifts</option>
-            {shifts.map((s) => (
-              <option key={s.id} value={s.id}>{s.displayLabel}</option>
-            ))}
+            {shifts.map((s) => {
+              const id = entityId(s);
+              return id ? <option key={id} value={id}>{s.displayLabel || s.name}</option> : null;
+            })}
           </select>
         </label>
         <label>
           Department
-          <select value={departmentId} onChange={(e) => setDepartmentId(e.target.value)}>
+          <select
+            value={departmentId}
+            onChange={(e) => {
+              const next = e.target.value;
+              setDepartmentId(next);
+              const stillVisible = (employees || []).some((emp) => {
+                if (entityId(emp) !== employeeId) return false;
+                if (!queryId(next)) return true;
+                return Number(emp.departmentId ?? emp.DepartmentId) === queryId(next);
+              });
+              if (!stillVisible) setEmployeeId('');
+            }}
+          >
             <option value="">All</option>
-            {departments.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+            {departments.map((d) => {
+              const id = entityId(d);
+              return id ? <option key={id} value={id}>{d.name}</option> : null;
+            })}
           </select>
         </label>
         <label>
           Employee
           <select value={employeeId} onChange={(e) => setEmployeeId(e.target.value)}>
             <option value="">All</option>
-            {employees.map((e) => <option key={e.id} value={e.id}>{e.fullName}</option>)}
+            {employeeOptions.map((emp) => {
+              const id = entityId(emp);
+              return id ? (
+                <option key={id} value={id}>
+                  {emp.fullName}{emp.employeeCode ? ` (${emp.employeeCode})` : ''}
+                </option>
+              ) : null;
+            })}
           </select>
         </label>
-        <button type="button" className="btn btn-primary" onClick={load}>Generate</button>
-      </div>
+        <button type="submit" className="btn btn-primary" disabled={busy}>
+          {busy ? 'Generating…' : 'Generate'}
+        </button>
+      </form>
 
       {report && (
         <>
@@ -195,10 +245,12 @@ export default function ReportsPage() {
             {(report.shiftDisplay || report.shiftName) ? (
               <> · Shift: <strong>{report.shiftDisplay || report.shiftName}</strong></>
             ) : null}
+            {filters.departmentName ? <> · Department: <strong>{filters.departmentName}</strong></> : null}
+            {filters.employeeName ? <> · Employee: <strong>{filters.employeeName}</strong></> : null}
           </p>
 
           <div className="stats-grid compact no-print">
-            <div className="stat-card"><div className="stat-value">{report.employeeDays}</div><div className="stat-label">Employee-shifts</div></div>
+            <div className="stat-card"><div className="stat-value">{report.employeeDays}</div><div className="stat-label">Employees</div></div>
             <div className="stat-card tone-green"><div className="stat-value">{report.mealWellSatisfiedCount}</div><div className="stat-label">Meal WELL SATISFIED</div></div>
             <div className="stat-card tone-red"><div className="stat-value">{report.mealExceededCount}</div><div className="stat-label">Meal EXCEEDED BREAK TIME LIMIT</div></div>
             <div className="stat-card tone-green"><div className="stat-value">{report.comfortWellSatisfiedCount}</div><div className="stat-label">Comfort WELL SATISFIED</div></div>
@@ -209,31 +261,28 @@ export default function ReportsPage() {
             <table>
               <thead>
                 <tr>
-                  <th>Shift start date</th>
+                  <th>Period</th>
                   <th>Code</th>
                   <th>Employee</th>
                   <th>Department</th>
                   <th>Shift</th>
-                  <th>Meal</th>
+                  <th>Meal total</th>
                   <th>Meal status</th>
-                  <th>Comfort</th>
+                  <th>Comfort total</th>
                   <th>Comfort status</th>
                 </tr>
               </thead>
               <tbody>
                 {report.rows.map((r) => (
-                  <tr key={`${r.employeeId}-${r.date}`}>
-                    <td>
-                      {r.date}
-                      {r.periodLabel ? <div className="muted">{r.periodLabel}</div> : null}
-                    </td>
+                  <tr key={r.employeeId}>
+                    <td>{r.periodLabel || r.date}</td>
                     <td>{r.employeeCode}</td>
                     <td>{r.employeeName}</td>
                     <td>{r.departmentName}</td>
                     <td>{r.shiftName || '—'}</td>
-                    <td>{r.mealBreakDisplay} <span className="muted">({r.mealBreakCount})</span></td>
+                    <td>{r.mealBreakDisplay}</td>
                     <td><StatusBadge status={r.mealStatus} color={r.mealStatusColor} /></td>
-                    <td>{r.comfortBreakDisplay} <span className="muted">({r.comfortBreakCount})</span></td>
+                    <td>{r.comfortBreakDisplay}</td>
                     <td><StatusBadge status={r.comfortStatus} color={r.comfortStatusColor} /></td>
                   </tr>
                 ))}
