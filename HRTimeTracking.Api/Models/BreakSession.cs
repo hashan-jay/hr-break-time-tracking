@@ -20,6 +20,7 @@ public class BreakSession
 
     public int? DurationSeconds { get; set; }
 
+    /// <summary>Shift-period start date (calendar day if the employee has no shift).</summary>
     public DateOnly BreakDate { get; set; }
 
     [MaxLength(450)]

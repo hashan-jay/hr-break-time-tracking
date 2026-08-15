@@ -51,7 +51,7 @@ function BreakTypeBoard({
                 <th>Code</th>
                 <th>Employee</th>
                 <th>Department</th>
-                <th>Today (HH:MM:SS)</th>
+                <th>This shift (HH:MM:SS)</th>
                 <th>Status</th>
                 <th>State</th>
               </tr>
@@ -100,7 +100,7 @@ function BreakTypeBoard({
                 <StatusBadge status={selectedFields.status} color={selectedFields.statusColor} />
                 <div className="selected-meta">
                   <div>
-                    Today {breakType.toLowerCase()} total:{' '}
+                    This shift {breakType.toLowerCase()} total:{' '}
                     <strong>{selectedFields.totalDisplay}</strong> ({selectedFields.totalSeconds}s)
                   </div>
                   <div>
@@ -283,11 +283,13 @@ export default function TrackingPage() {
         <div>
           <h1>Live Tracking</h1>
           <p>
-            Capture Meal Break and Comfort Break separately. Select an employee in a section, then press{' '}
+            Capture Meal Break and Comfort Break separately. Totals are shift-wise, including overnight
+            shifts (for example 20:00–08:00). Select an employee in a section, then press{' '}
             <kbd>Enter</kbd> / <kbd>Space</kbd> to toggle. Times use this PC&apos;s local clock.
           </p>
         </div>
         <div className="header-stats">
+          {board?.periodLabel && <span>{board.periodLabel}</span>}
           <span>On break: {board?.onBreakCount ?? 0}</span>
           <span>Meal: {board?.mealOnBreakCount ?? 0}</span>
           <span>Comfort: {board?.comfortOnBreakCount ?? 0}</span>

@@ -58,7 +58,7 @@ public static class TimeDisplay
     }
 
     /// <summary>
-    /// Daily break total in seconds: sum of closed session durations (from out/in)
+    /// Break total in seconds for the supplied sessions: closed out/in durations
     /// plus live elapsed seconds for any open session.
     /// </summary>
     public static int ComputeDailyTotalSeconds(IEnumerable<Models.BreakSession> sessions, DateTime? now = null)

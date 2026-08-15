@@ -65,7 +65,7 @@ public class ReportService : IReportService
         var sessionsQuery = _db.BreakSessions.AsNoTracking()
             .Include(b => b.Employee).ThenInclude(e => e.Department)
             .Include(b => b.Employee).ThenInclude(e => e.Shift)
-            .Where(b => b.BreakDate >= from && b.BreakDate <= to && !b.Employee.IsDeleted);
+            .Where(b => b.BreakDate >= from.AddDays(-1) && b.BreakDate <= to.AddDays(1) && !b.Employee.IsDeleted);
 
         if (departmentId.HasValue)
             sessionsQuery = sessionsQuery.Where(b => b.Employee.DepartmentId == departmentId.Value);
@@ -85,29 +85,39 @@ public class ReportService : IReportService
 
         var now = TimeDisplay.NowLocal();
 
-        var groups = sessions
-            .GroupBy(s => new
+        var grouped = sessions
+            .Select(s =>
             {
-                s.EmployeeId,
-                s.BreakDate,
-                s.Employee.EmployeeCode,
-                s.Employee.FullName,
-                Dept = s.Employee.Department.Name,
-                ShiftName = s.Employee.Shift != null ? s.Employee.Shift.Name : null
+                var period = ShiftWindow.ForOutTime(s.Employee.Shift, s.OutTime);
+                return new { Session = s, Period = period };
             })
+            .Where(x => ShiftWindow.Overlaps(x.Period, from, to))
+            .GroupBy(x => new
+            {
+                x.Session.EmployeeId,
+                PeriodStart = x.Period.Start,
+                PeriodEnd = x.Period.End,
+                x.Session.Employee.EmployeeCode,
+                x.Session.Employee.FullName,
+                Dept = x.Session.Employee.Department.Name,
+                ShiftName = x.Session.Employee.Shift != null ? x.Session.Employee.Shift.Name : null,
+                Shift = x.Session.Employee.Shift
+            });
+
+        var groups = grouped
             .Select(g =>
             {
-                var dayEnd = g.Key.BreakDate == TimeDisplay.TodayLocal()
-                    ? now
-                    : g.Key.BreakDate.ToDateTime(new TimeOnly(23, 59, 59), DateTimeKind.Local);
+                var period = new ShiftPeriod(g.Key.PeriodStart, g.Key.PeriodEnd);
+                var reference = now < period.End ? now : period.End;
+                var periodSessions = g.Select(x => x.Session).ToList();
 
-                var comfortSessions = g.Where(s =>
+                var comfortSessions = periodSessions.Where(s =>
                     BreakTypes.Comfort.Equals(string.IsNullOrWhiteSpace(s.BreakType) ? BreakTypes.Comfort : s.BreakType, StringComparison.OrdinalIgnoreCase)).ToList();
-                var mealSessions = g.Where(s =>
+                var mealSessions = periodSessions.Where(s =>
                     BreakTypes.Meal.Equals(s.BreakType, StringComparison.OrdinalIgnoreCase)).ToList();
 
-                var comfortTotal = TimeDisplay.ComputeDailyTotalSeconds(comfortSessions, dayEnd);
-                var mealTotal = TimeDisplay.ComputeDailyTotalSeconds(mealSessions, dayEnd);
+                var comfortTotal = TimeDisplay.ComputeDailyTotalSeconds(comfortSessions, reference);
+                var mealTotal = TimeDisplay.ComputeDailyTotalSeconds(mealSessions, reference);
                 var (comfortStatus, comfortColor) = BreakStatusCodes.FromTotalSeconds(comfortTotal, comfortLimit);
                 var (mealStatus, mealColor) = BreakStatusCodes.FromTotalSeconds(mealTotal, mealLimit);
 
@@ -117,7 +127,7 @@ public class ReportService : IReportService
                     g.Key.FullName,
                     g.Key.Dept,
                     g.Key.ShiftName,
-                    g.Key.BreakDate,
+                    period.StartDate,
                     comfortTotal,
                     TimeDisplay.FormatSeconds(comfortTotal),
                     comfortStatus,
@@ -127,7 +137,10 @@ public class ReportService : IReportService
                     TimeDisplay.FormatSeconds(mealTotal),
                     mealStatus,
                     mealColor,
-                    mealSessions.Count);
+                    mealSessions.Count,
+                    period.Start,
+                    period.End,
+                    ShiftWindow.FormatLabel(g.Key.Shift, period));
             })
             .OrderBy(r => r.Date)
             .ThenBy(r => r.EmployeeName)
@@ -140,10 +153,10 @@ public class ReportService : IReportService
             mealLimit,
             groups.Count,
             groups.Count(r => r.ComfortStatus == BreakStatusCodes.WellSatisfied),
-            groups.Count(r => r.ComfortStatus == BreakStatusCodes.Satisfied),
+            0,
             groups.Count(r => r.ComfortStatus == BreakStatusCodes.Exceeded),
             groups.Count(r => r.MealStatus == BreakStatusCodes.WellSatisfied),
-            groups.Count(r => r.MealStatus == BreakStatusCodes.Satisfied),
+            0,
             groups.Count(r => r.MealStatus == BreakStatusCodes.Exceeded),
             shiftId,
             shiftName,

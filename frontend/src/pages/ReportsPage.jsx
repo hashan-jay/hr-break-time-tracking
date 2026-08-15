@@ -78,12 +78,13 @@ export default function ReportsPage() {
   const exportCsv = () => {
     if (!report?.rows?.length) return;
     const header = [
-      'Date', 'Code', 'Employee', 'Department', 'Shift',
+      'ShiftDate', 'Period', 'Code', 'Employee', 'Department', 'Shift',
       'ComfortTotal', 'ComfortSeconds', 'ComfortStatus', 'ComfortBreaks',
       'MealTotal', 'MealSeconds', 'MealStatus', 'MealBreaks',
     ];
     const lines = report.rows.map((r) => [
       r.date,
+      `"${r.periodLabel || ''}"`,
       r.employeeCode,
       `"${r.employeeName}"`,
       `"${r.departmentName}"`,
@@ -130,7 +131,10 @@ export default function ReportsPage() {
       <header className="page-header no-print">
         <div>
           <h1>Reports</h1>
-          <p>Filter by date, shift, department, or employee. Generate shift-wise compliance reports.</p>
+          <p>
+            Filter by date, shift, department, or employee. Totals are shift-wise: overnight shifts
+            (for example 20:00–08:00) stay on one row and do not split at midnight.
+          </p>
         </div>
         <div className="header-actions">
           <button type="button" className="btn btn-ghost" onClick={exportCsv} disabled={!report?.rows?.length}>
@@ -193,20 +197,18 @@ export default function ReportsPage() {
           </p>
 
           <div className="stats-grid compact no-print">
-            <div className="stat-card"><div className="stat-value">{report.employeeDays}</div><div className="stat-label">Employee-days</div></div>
-            <div className="stat-card tone-green"><div className="stat-value">{report.mealWellSatisfiedCount}</div><div className="stat-label">Meal Well Satisfied</div></div>
-            <div className="stat-card tone-blue"><div className="stat-value">{report.mealSatisfiedCount}</div><div className="stat-label">Meal Satisfied</div></div>
-            <div className="stat-card tone-red"><div className="stat-value">{report.mealExceededCount}</div><div className="stat-label">Meal Exceeded</div></div>
-            <div className="stat-card tone-green"><div className="stat-value">{report.comfortWellSatisfiedCount}</div><div className="stat-label">Comfort Well Satisfied</div></div>
-            <div className="stat-card tone-blue"><div className="stat-value">{report.comfortSatisfiedCount}</div><div className="stat-label">Comfort Satisfied</div></div>
-            <div className="stat-card tone-red"><div className="stat-value">{report.comfortExceededCount}</div><div className="stat-label">Comfort Exceeded</div></div>
+            <div className="stat-card"><div className="stat-value">{report.employeeDays}</div><div className="stat-label">Employee-shifts</div></div>
+            <div className="stat-card tone-green"><div className="stat-value">{report.mealWellSatisfiedCount}</div><div className="stat-label">Meal WELL SATISFIED</div></div>
+            <div className="stat-card tone-red"><div className="stat-value">{report.mealExceededCount}</div><div className="stat-label">Meal EXCEEDED BREAK TIME LIMIT</div></div>
+            <div className="stat-card tone-green"><div className="stat-value">{report.comfortWellSatisfiedCount}</div><div className="stat-label">Comfort WELL SATISFIED</div></div>
+            <div className="stat-card tone-red"><div className="stat-value">{report.comfortExceededCount}</div><div className="stat-label">Comfort EXCEEDED BREAK TIME LIMIT</div></div>
           </div>
 
           <div className="table-wrap no-print">
             <table>
               <thead>
                 <tr>
-                  <th>Date</th>
+                  <th>Shift date</th>
                   <th>Code</th>
                   <th>Employee</th>
                   <th>Department</th>
@@ -220,7 +222,10 @@ export default function ReportsPage() {
               <tbody>
                 {report.rows.map((r) => (
                   <tr key={`${r.employeeId}-${r.date}`}>
-                    <td>{r.date}</td>
+                    <td>
+                      {r.date}
+                      {r.periodLabel ? <div className="muted">{r.periodLabel}</div> : null}
+                    </td>
                     <td>{r.employeeCode}</td>
                     <td>{r.employeeName}</td>
                     <td>{r.departmentName}</td>

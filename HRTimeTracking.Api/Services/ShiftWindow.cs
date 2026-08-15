@@ -1,0 +1,116 @@
+using HRTimeTracking.Api.Models;
+
+namespace HRTimeTracking.Api.Services;
+
+/// <summary>
+/// One continuous work period for a shift. Overnight shifts (20:00–08:00)
+/// stay on a single window that crosses midnight.
+/// </summary>
+public readonly record struct ShiftPeriod(DateTime Start, DateTime End)
+{
+    public DateOnly StartDate => DateOnly.FromDateTime(Start);
+    public bool Contains(DateTime value)
+    {
+        var local = TimeDisplay.AsLocal(value);
+        return local >= Start && local < End;
+    }
+}
+
+/// <summary>
+/// Resolves the shift-wise time window used for Meal/Comfort totals and reports.
+/// Employees without a shift fall back to the local calendar day.
+/// </summary>
+public static class ShiftWindow
+{
+    public static ShiftPeriod CalendarDay(DateOnly date)
+    {
+        var start = date.ToDateTime(TimeOnly.MinValue, DateTimeKind.Local);
+        return new ShiftPeriod(start, start.AddDays(1));
+    }
+
+    public static ShiftPeriod CalendarDay(DateTime now)
+        => CalendarDay(DateOnly.FromDateTime(TimeDisplay.AsLocal(now)));
+
+    /// <summary>
+    /// Current (or most recently started) period for live tracking.
+    /// After a night shift ends and before the next one starts, the completed
+    /// overnight window is kept so HR can still review last night's totals.
+    /// </summary>
+    public static ShiftPeriod Resolve(Shift? shift, DateTime now)
+    {
+        now = TimeDisplay.AsLocal(now);
+        if (shift is null)
+            return CalendarDay(now);
+
+        return shift.SpansNextDay
+            ? ResolveOvernight(shift, now)
+            : ResolveSameDay(shift, now);
+    }
+
+    /// <summary>
+    /// Period that a break out-time belongs to (same rules as live tracking).
+    /// </summary>
+    public static ShiftPeriod ForOutTime(Shift? shift, DateTime outTime)
+        => Resolve(shift, outTime);
+
+    public static ShiftPeriod StartingOn(Shift shift, DateOnly startDate)
+    {
+        var start = startDate.ToDateTime(shift.StartTime, DateTimeKind.Local);
+        var end = shift.SpansNextDay
+            ? startDate.AddDays(1).ToDateTime(shift.EndTime, DateTimeKind.Local)
+            : startDate.ToDateTime(shift.EndTime, DateTimeKind.Local);
+        return new ShiftPeriod(start, end);
+    }
+
+    public static bool StartedIn(DateTime outTime, ShiftPeriod period)
+    {
+        var local = TimeDisplay.AsLocal(outTime);
+        return local >= period.Start && local < period.End;
+    }
+
+    public static bool Overlaps(ShiftPeriod period, DateOnly from, DateOnly to)
+    {
+        var rangeStart = from.ToDateTime(TimeOnly.MinValue, DateTimeKind.Local);
+        var rangeEnd = to.AddDays(1).ToDateTime(TimeOnly.MinValue, DateTimeKind.Local);
+        return period.Start < rangeEnd && period.End > rangeStart;
+    }
+
+    public static string FormatLabel(Shift? shift, ShiftPeriod period)
+    {
+        if (shift is null)
+            return $"Calendar day {period.StartDate:yyyy-MM-dd}";
+
+        return $"{ShiftService.BuildDisplayLabel(shift.Name, shift.StartTime, shift.EndTime, shift.SpansNextDay)} · {period.StartDate:yyyy-MM-dd}";
+    }
+
+    private static ShiftPeriod ResolveSameDay(Shift shift, DateTime now)
+    {
+        var date = DateOnly.FromDateTime(now);
+        var todayStart = date.ToDateTime(shift.StartTime, DateTimeKind.Local);
+        var todayEnd = date.ToDateTime(shift.EndTime, DateTimeKind.Local);
+
+        if (now < todayStart)
+        {
+            var previous = date.AddDays(-1);
+            return new ShiftPeriod(
+                previous.ToDateTime(shift.StartTime, DateTimeKind.Local),
+                previous.ToDateTime(shift.EndTime, DateTimeKind.Local));
+        }
+
+        return new ShiftPeriod(todayStart, todayEnd);
+    }
+
+    private static ShiftPeriod ResolveOvernight(Shift shift, DateTime now)
+    {
+        var date = DateOnly.FromDateTime(now);
+        var tonightStart = date.ToDateTime(shift.StartTime, DateTimeKind.Local);
+        var tonightEnd = date.AddDays(1).ToDateTime(shift.EndTime, DateTimeKind.Local);
+
+        if (now >= tonightStart)
+            return new ShiftPeriod(tonightStart, tonightEnd);
+
+        var lastStart = date.AddDays(-1).ToDateTime(shift.StartTime, DateTimeKind.Local);
+        var lastEnd = date.ToDateTime(shift.EndTime, DateTimeKind.Local);
+        return new ShiftPeriod(lastStart, lastEnd);
+    }
+}

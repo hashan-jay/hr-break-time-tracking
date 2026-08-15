@@ -1454,6 +1454,8 @@ tbody tr.is-deleted:hover { background: #f4ece8; }
   padding: 0.25rem 0.65rem;
   font-size: 0.78rem;
   font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
 }
 
 .status-green { background: #e5f6eb; color: var(--green); }

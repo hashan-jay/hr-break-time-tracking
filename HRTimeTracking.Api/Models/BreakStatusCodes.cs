@@ -8,23 +8,22 @@ public static class BreakStatusCodes
     /// <summary>Legacy alias kept for older references; equals Comfort default.</summary>
     public const int DefaultDailyLimitMinutes = DefaultComfortLimitMinutes;
 
-    public const string WellSatisfied = "Well Satisfied";
-    public const string Satisfied = "Satisfied";
-    public const string Exceeded = "Exceeded Break Time Limit";
+    public const string WellSatisfied = "WELL SATISFIED";
+    public const string Exceeded = "EXCEEDED BREAK TIME LIMIT";
 
     public const string ColorGreen = "green";
-    public const string ColorBlue = "blue";
     public const string ColorRed = "red";
 
+    /// <summary>
+    /// Limit X minutes is treated as X:00. Green if tracked time is &lt;= X:00,
+    /// red if tracked time is greater than X:00.
+    /// </summary>
     public static (string Status, string Color) FromTotalSeconds(int totalSeconds, int dailyLimitMinutes = DefaultComfortLimitMinutes)
     {
-        var limitSeconds = Math.Max(1, dailyLimitMinutes) * 60;
+        var limitSeconds = Math.Max(0, dailyLimitMinutes) * 60;
 
-        if (totalSeconds < limitSeconds)
+        if (totalSeconds <= limitSeconds)
             return (WellSatisfied, ColorGreen);
-
-        if (totalSeconds == limitSeconds)
-            return (Satisfied, ColorBlue);
 
         return (Exceeded, ColorRed);
     }

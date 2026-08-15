@@ -37,6 +37,7 @@ public class BreakTrackingService : IBreakTrackingService
 
         var employeesQuery = _db.Employees.AsNoTracking()
             .Include(e => e.Department)
+            .Include(e => e.Shift)
             .Where(e => !e.IsDeleted);
 
         if (departmentId.HasValue)
@@ -62,9 +63,13 @@ public class BreakTrackingService : IBreakTrackingService
         var employees = await employeesQuery.OrderBy(e => e.FullName).ToListAsync();
         var employeeIds = employees.Select(e => e.Id).ToList();
 
-        var sessions = await _db.BreakSessions.AsNoTracking()
-            .Where(b => employeeIds.Contains(b.EmployeeId) && b.BreakDate == today)
-            .ToListAsync();
+        var lookback = now.Date.AddDays(-2);
+        var sessions = employeeIds.Count == 0
+            ? new List<BreakSession>()
+            : await _db.BreakSessions.AsNoTracking()
+                .Where(b => employeeIds.Contains(b.EmployeeId) &&
+                            (b.InTime == null || b.OutTime >= lookback))
+                .ToListAsync();
 
         foreach (var session in sessions)
         {
@@ -75,7 +80,26 @@ public class BreakTrackingService : IBreakTrackingService
         }
 
         var statuses = employees.Select(e =>
-            BuildStatus(e, sessions.Where(s => s.EmployeeId == e.Id).ToList(), now, comfortLimit, mealLimit)).ToList();
+        {
+            var period = ShiftWindow.Resolve(e.Shift, now);
+            var inPeriod = sessions
+                .Where(s => s.EmployeeId == e.Id && ShiftWindow.StartedIn(s.OutTime, period))
+                .ToList();
+            return BuildStatus(e, inPeriod, now, comfortLimit, mealLimit);
+        }).ToList();
+
+        DateTime? periodStart = null;
+        DateTime? periodEnd = null;
+        string? periodLabel = null;
+        if (shiftIds.Count == 1)
+        {
+            var selected = employees.Select(e => e.Shift).FirstOrDefault(s => s is not null && s.Id == shiftIds[0])
+                ?? await _db.Shifts.AsNoTracking().FirstOrDefaultAsync(s => s.Id == shiftIds[0]);
+            var period = ShiftWindow.Resolve(selected, now);
+            periodStart = period.Start;
+            periodEnd = period.End;
+            periodLabel = ShiftWindow.FormatLabel(selected, period);
+        }
 
         return new LiveBoardDto(
             today,
@@ -86,25 +110,31 @@ public class BreakTrackingService : IBreakTrackingService
             statuses.Count(s => s.IsOnComfortBreak),
             statuses.Count(s => s.IsOnMealBreak),
             statuses.Count(s => s.ComfortStatus == BreakStatusCodes.Exceeded),
-            statuses.Count(s => s.ComfortStatus == BreakStatusCodes.Satisfied),
+            0,
             statuses.Count(s => s.ComfortStatus == BreakStatusCodes.WellSatisfied),
             statuses.Count(s => s.MealStatus == BreakStatusCodes.Exceeded),
-            statuses.Count(s => s.MealStatus == BreakStatusCodes.Satisfied),
-            statuses.Count(s => s.MealStatus == BreakStatusCodes.WellSatisfied));
+            0,
+            statuses.Count(s => s.MealStatus == BreakStatusCodes.WellSatisfied),
+            periodStart,
+            periodEnd,
+            periodLabel);
     }
 
     public async Task<EmployeeBreakStatusDto?> GetEmployeeStatusAsync(int employeeId)
     {
         var employee = await _db.Employees.AsNoTracking()
             .Include(e => e.Department)
+            .Include(e => e.Shift)
             .FirstOrDefaultAsync(e => e.Id == employeeId);
         if (employee is null) return null;
 
-        var today = TimeDisplay.TodayLocal();
+        var now = TimeDisplay.NowLocal();
+        var period = ShiftWindow.Resolve(employee.Shift, now);
         var comfortLimit = await _settings.GetComfortLimitMinutesAsync();
         var mealLimit = await _settings.GetMealLimitMinutesAsync();
         var sessions = await _db.BreakSessions.AsNoTracking()
-            .Where(b => b.EmployeeId == employeeId && b.BreakDate == today)
+            .Where(b => b.EmployeeId == employeeId &&
+                        (b.InTime == null || b.OutTime >= period.Start.AddDays(-1)))
             .ToListAsync();
 
         foreach (var session in sessions)
@@ -115,7 +145,8 @@ public class BreakTrackingService : IBreakTrackingService
                 session.BreakType = BreakTypes.Comfort;
         }
 
-        return BuildStatus(employee, sessions, TimeDisplay.NowLocal(), comfortLimit, mealLimit);
+        var inPeriod = sessions.Where(s => ShiftWindow.StartedIn(s.OutTime, period)).ToList();
+        return BuildStatus(employee, inPeriod, now, comfortLimit, mealLimit);
     }
 
     public async Task<(bool Ok, string? Error, EmployeeBreakStatusDto? Data)> ToggleAsync(int employeeId, string breakType, string? userId)
@@ -141,7 +172,7 @@ public class BreakTrackingService : IBreakTrackingService
             return (false, "Break type must be Comfort or Meal.", null);
         var type = BreakTypes.Normalize(breakType);
 
-        var employee = await _db.Employees.Include(e => e.Department)
+        var employee = await _db.Employees.Include(e => e.Department).Include(e => e.Shift)
             .FirstOrDefaultAsync(e => e.Id == employeeId && !e.IsDeleted);
         if (employee is null) return (false, "Employee not found.", null);
 
@@ -153,12 +184,13 @@ public class BreakTrackingService : IBreakTrackingService
         }
 
         var now = TimeDisplay.NowLocal();
+        var period = ShiftWindow.Resolve(employee.Shift, now);
         var session = new BreakSession
         {
             EmployeeId = employeeId,
             BreakType = type,
             OutTime = now,
-            BreakDate = DateOnly.FromDateTime(now),
+            BreakDate = period.StartDate,
             RecordedByUserId = userId,
             CreatedAt = now
         };
@@ -218,7 +250,8 @@ public class BreakTrackingService : IBreakTrackingService
 
         var query = _db.BreakSessions.AsNoTracking()
             .Include(b => b.Employee).ThenInclude(e => e.Department)
-            .Where(b => b.BreakDate >= fromDate && b.BreakDate <= toDate && !b.Employee.IsDeleted);
+            .Include(b => b.Employee).ThenInclude(e => e.Shift)
+            .Where(b => b.BreakDate >= fromDate.AddDays(-1) && b.BreakDate <= toDate.AddDays(1) && !b.Employee.IsDeleted);
 
         if (employeeId.HasValue) query = query.Where(b => b.EmployeeId == employeeId.Value);
         if (departmentId.HasValue) query = query.Where(b => b.Employee.DepartmentId == departmentId.Value);
@@ -229,7 +262,14 @@ public class BreakTrackingService : IBreakTrackingService
         }
 
         var list = await query.OrderByDescending(b => b.OutTime).ToListAsync();
-        return list.Select(MapSession).ToList();
+        return list
+            .Where(b =>
+            {
+                var period = ShiftWindow.ForOutTime(b.Employee.Shift, TimeDisplay.AsLocal(b.OutTime));
+                return ShiftWindow.Overlaps(period, fromDate, toDate);
+            })
+            .Select(MapSession)
+            .ToList();
     }
 
     private static BreakSessionDto MapSession(BreakSession b)

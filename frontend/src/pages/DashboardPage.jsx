@@ -150,26 +150,24 @@ export default function DashboardPage() {
             <section className="portal-quick-section">
               <div className="portal-section-head">
                 <h2>Meal Break dashboard</h2>
-                <p>Daily meal limit: {data.mealLimitMinutes ?? 60} minutes. Status counts for today.</p>
+                <p>Meal limit: {data.mealLimitMinutes ?? 60} minutes. Status counts for each employee&apos;s current shift.</p>
               </div>
               <section className="portal-kpi-grid" aria-label="Meal break KPIs">
                 <KpiCard label="On meal break" value={data.mealOnBreakNow} icon={KPI_ICONS.clock} tone="amber" />
-                <KpiCard label="Well satisfied" value={data.mealWellSatisfiedToday} icon={KPI_ICONS.check} tone="emerald" />
-                <KpiCard label="Satisfied" value={data.mealSatisfiedToday} icon={KPI_ICONS.equal} tone="sky" />
-                <KpiCard label="Exceeded limit" value={data.mealExceededToday} icon={KPI_ICONS.alert} tone="rose" />
+                <KpiCard label="WELL SATISFIED" value={data.mealWellSatisfiedToday} icon={KPI_ICONS.check} tone="emerald" />
+                <KpiCard label="EXCEEDED BREAK TIME LIMIT" value={data.mealExceededToday} icon={KPI_ICONS.alert} tone="rose" />
               </section>
             </section>
 
             <section className="portal-quick-section">
               <div className="portal-section-head">
                 <h2>Comfort Break dashboard</h2>
-                <p>Daily comfort limit: {data.comfortLimitMinutes ?? 20} minutes. Status counts for today.</p>
+                <p>Comfort limit: {data.comfortLimitMinutes ?? 20} minutes. Status counts for each employee&apos;s current shift.</p>
               </div>
               <section className="portal-kpi-grid" aria-label="Comfort break KPIs">
                 <KpiCard label="On comfort break" value={data.comfortOnBreakNow} icon={KPI_ICONS.clock} tone="amber" />
-                <KpiCard label="Well satisfied" value={data.comfortWellSatisfiedToday} icon={KPI_ICONS.check} tone="emerald" />
-                <KpiCard label="Satisfied" value={data.comfortSatisfiedToday} icon={KPI_ICONS.equal} tone="sky" />
-                <KpiCard label="Exceeded limit" value={data.comfortExceededToday} icon={KPI_ICONS.alert} tone="rose" />
+                <KpiCard label="WELL SATISFIED" value={data.comfortWellSatisfiedToday} icon={KPI_ICONS.check} tone="emerald" />
+                <KpiCard label="EXCEEDED BREAK TIME LIMIT" value={data.comfortExceededToday} icon={KPI_ICONS.alert} tone="rose" />
               </section>
             </section>
           </div>

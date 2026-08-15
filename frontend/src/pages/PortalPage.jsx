@@ -50,7 +50,7 @@ function PortalBreakSection({
                   <th>Code</th>
                   <th>Employee</th>
                   <th>Department</th>
-                  <th>Today</th>
+                  <th>This shift</th>
                   <th>Status</th>
                   <th>State</th>
                 </tr>
@@ -96,7 +96,7 @@ function PortalBreakSection({
                 <span>{selected.employeeCode} · {selected.departmentName}</span>
                 <StatusBadge status={fields.status} color={fields.statusColor} />
                 <div className="selected-meta">
-                  <div>Today: <strong>{fields.totalDisplay}</strong></div>
+                  <div>This shift: <strong>{fields.totalDisplay}</strong></div>
                   <div>
                     {onThisBreak
                       ? `Out since ${formatLocalClock(selected.currentOutTime)}`
@@ -232,7 +232,7 @@ export default function PortalPage() {
       setMessage(
         data.isOnBreak
           ? `${breakType} break started for ${data.fullName} at ${formatLocalClock(data.currentOutTime)}.`
-          : `${breakType} break ended for ${data.fullName}. Today total: ${fields.totalDisplay}.`,
+          : `${breakType} break ended for ${data.fullName}. This shift total: ${fields.totalDisplay}.`,
       );
       await loadBoard();
     } catch (err) {
@@ -360,6 +360,11 @@ export default function PortalPage() {
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
+        <p className="hint">
+          {board?.periodLabel
+            ? `Shift window: ${board.periodLabel}`
+            : 'Meal and Comfort totals are counted for the selected shift window, including overnight shifts.'}
+        </p>
 
         <div className="break-type-stack">
           <div

@@ -50,7 +50,8 @@ export default function SettingsPage() {
       <section className="settings-list">
         <h2 className="settings-section-title">Break duration limits</h2>
         <p className="hint">
-          Defaults: Meal 60 minutes, Comfort 20 minutes. Adjustable here only by Developer.
+          Defaults: Meal 60 minutes, Comfort 20 minutes. At or under X:00 is WELL SATISFIED (green).
+          Over X:00 is EXCEEDED BREAK TIME LIMIT (red).
         </p>
         {primary.map((s) => (
           <div className="setting-row" key={s.id}>

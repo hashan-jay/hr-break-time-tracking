@@ -159,7 +159,10 @@ public record LiveBoardDto(
     int ComfortWellSatisfiedCount,
     int MealExceededCount,
     int MealSatisfiedCount,
-    int MealWellSatisfiedCount);
+    int MealWellSatisfiedCount,
+    DateTime? PeriodStart = null,
+    DateTime? PeriodEnd = null,
+    string? PeriodLabel = null);
 
 public record ReportRowDto(
     int EmployeeId,
@@ -177,7 +180,10 @@ public record ReportRowDto(
     string MealBreakDisplay,
     string MealStatus,
     string MealStatusColor,
-    int MealBreakCount);
+    int MealBreakCount,
+    DateTime? PeriodStart = null,
+    DateTime? PeriodEnd = null,
+    string? PeriodLabel = null);
 
 public record ReportSummaryDto(
     DateOnly From,
