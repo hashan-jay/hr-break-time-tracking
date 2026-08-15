@@ -49,6 +49,67 @@ function BreakTypeBoard({
       </header>
 
       <div className="tracking-layout">
+        <aside className="capture-panel">
+          <h2>Capture {title}</h2>
+          {selected && selectedFields ? (
+            <>
+              <div className="selected-employee">
+                <strong>{selected.fullName}</strong>
+                <span>{selected.employeeCode} · {selected.departmentName}</span>
+                <StatusBadge status={selectedFields.status} color={selectedFields.statusColor} />
+                <div className="selected-meta">
+                  <div>
+                    This shift {breakType.toLowerCase()} total:{' '}
+                    <strong>{selectedFields.totalDisplay}</strong> ({selectedFields.totalSeconds}s)
+                  </div>
+                  <div>
+                    {onThisBreak
+                      ? `Out since ${formatLocalClock(selected.currentOutTime)} · open ${formatElapsed(selected.currentBreakElapsedSeconds)}`
+                      : blockedByOther
+                        ? `Currently on ${selected.currentBreakType} break — end that first`
+                        : offShift
+                          ? offShiftReason(selected)
+                          : 'Currently in office'}
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                className={`btn ${onThisBreak ? 'btn-in' : 'btn-out'} btn-xl`}
+                disabled={busy || captureLocked}
+                onClick={() => onToggle(breakType)}
+              >
+                {onThisBreak
+                  ? `End ${breakType} break (Space / Enter)`
+                  : `Start ${breakType} break (Enter / Space)`}
+              </button>
+              <div className="capture-split">
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  disabled={busy || selected.isOnBreak || offShift}
+                  onClick={() => onOut(breakType)}
+                >
+                  Out only (O)
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  disabled={busy || !onThisBreak}
+                  onClick={() => onIn(breakType)}
+                >
+                  In only (I)
+                </button>
+              </div>
+              <p className="hint">
+                Meal and Comfort are tracked separately. Only one break can be open at a time.
+              </p>
+            </>
+          ) : (
+            <p className="hint">Select an employee from the list to capture {breakType.toLowerCase()} break time.</p>
+          )}
+        </aside>
+
         <div className="table-wrap">
           <table>
             <thead>
@@ -113,67 +174,6 @@ function BreakTypeBoard({
             </tbody>
           </table>
         </div>
-
-        <aside className="capture-panel">
-          <h2>Capture {title}</h2>
-          {selected && selectedFields ? (
-            <>
-              <div className="selected-employee">
-                <strong>{selected.fullName}</strong>
-                <span>{selected.employeeCode} · {selected.departmentName}</span>
-                <StatusBadge status={selectedFields.status} color={selectedFields.statusColor} />
-                <div className="selected-meta">
-                  <div>
-                    This shift {breakType.toLowerCase()} total:{' '}
-                    <strong>{selectedFields.totalDisplay}</strong> ({selectedFields.totalSeconds}s)
-                  </div>
-                  <div>
-                    {onThisBreak
-                      ? `Out since ${formatLocalClock(selected.currentOutTime)} · open ${formatElapsed(selected.currentBreakElapsedSeconds)}`
-                      : blockedByOther
-                        ? `Currently on ${selected.currentBreakType} break — end that first`
-                        : offShift
-                          ? offShiftReason(selected)
-                          : 'Currently in office'}
-                  </div>
-                </div>
-              </div>
-              <button
-                type="button"
-                className={`btn ${onThisBreak ? 'btn-in' : 'btn-out'} btn-xl`}
-                disabled={busy || captureLocked}
-                onClick={() => onToggle(breakType)}
-              >
-                {onThisBreak
-                  ? `End ${breakType} break (Space / Enter)`
-                  : `Start ${breakType} break (Enter / Space)`}
-              </button>
-              <div className="capture-split">
-                <button
-                  type="button"
-                  className="btn btn-ghost"
-                  disabled={busy || selected.isOnBreak || offShift}
-                  onClick={() => onOut(breakType)}
-                >
-                  Out only (O)
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-ghost"
-                  disabled={busy || !onThisBreak}
-                  onClick={() => onIn(breakType)}
-                >
-                  In only (I)
-                </button>
-              </div>
-              <p className="hint">
-                Meal and Comfort are tracked separately. Only one break can be open at a time.
-              </p>
-            </>
-          ) : (
-            <p className="hint">Select an employee from the list to capture {breakType.toLowerCase()} break time.</p>
-          )}
-        </aside>
       </div>
     </section>
   );

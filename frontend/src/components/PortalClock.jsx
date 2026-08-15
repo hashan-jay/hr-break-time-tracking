@@ -21,8 +21,8 @@ export default function PortalClock({ size = 'default' }) {
 
   return (
     <div className={`portal-clock ${size === 'large' ? 'portal-clock--large' : ''}`} aria-live="polite">
-      <div className="portal-clock__time">{time}</div>
       <div className="portal-clock__date">{date}</div>
+      <div className="portal-clock__time">{time}</div>
     </div>
   );
 }

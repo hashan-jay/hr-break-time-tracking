@@ -47,6 +47,43 @@ function PortalBreakSection({
       </header>
 
       <div className="portal-workbench">
+        <aside className="portal-capture">
+          <h2>Record {title}</h2>
+          {selected && fields ? (
+            <>
+              <div className="selected-employee">
+                <strong>{selected.fullName}</strong>
+                <span>{selected.employeeCode} · {selected.departmentName}</span>
+                <StatusBadge status={fields.status} color={fields.statusColor} />
+                <div className="selected-meta">
+                  <div>This shift: <strong>{fields.totalDisplay}</strong></div>
+                  <div>
+                    {onThisBreak
+                      ? `Out since ${formatLocalClock(selected.currentOutTime)}`
+                      : blockedByOther
+                        ? `On ${selected.currentBreakType} break — end that first`
+                        : offShift
+                          ? offShiftReason(selected)
+                          : `Ready to start ${breakType.toLowerCase()} break`}
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                className={`btn ${onThisBreak ? 'btn-in' : 'btn-out'} btn-xl`}
+                disabled={busy || apiOnline === false || captureLocked}
+                onClick={() => onToggle(breakType)}
+              >
+                {onThisBreak
+                  ? `End ${breakType} break (Enter / Space)`
+                  : `Start ${breakType} break (Enter / Space)`}
+              </button>
+            </>
+          ) : (
+            <p className="hint">Select your name in the list, then press Enter or Space.</p>
+          )}
+        </aside>
+
         <div className="portal-board">
           <div className="portal-board__table">
             <table>
@@ -112,43 +149,6 @@ function PortalBreakSection({
             </table>
           </div>
         </div>
-
-        <aside className="portal-capture">
-          <h2>Record {title}</h2>
-          {selected && fields ? (
-            <>
-              <div className="selected-employee">
-                <strong>{selected.fullName}</strong>
-                <span>{selected.employeeCode} · {selected.departmentName}</span>
-                <StatusBadge status={fields.status} color={fields.statusColor} />
-                <div className="selected-meta">
-                  <div>This shift: <strong>{fields.totalDisplay}</strong></div>
-                  <div>
-                    {onThisBreak
-                      ? `Out since ${formatLocalClock(selected.currentOutTime)}`
-                      : blockedByOther
-                        ? `On ${selected.currentBreakType} break — end that first`
-                        : offShift
-                          ? offShiftReason(selected)
-                          : `Ready to start ${breakType.toLowerCase()} break`}
-                  </div>
-                </div>
-              </div>
-              <button
-                type="button"
-                className={`btn ${onThisBreak ? 'btn-in' : 'btn-out'} btn-xl`}
-                disabled={busy || apiOnline === false || captureLocked}
-                onClick={() => onToggle(breakType)}
-              >
-                {onThisBreak
-                  ? `End ${breakType} break (Enter / Space)`
-                  : `Start ${breakType} break (Enter / Space)`}
-              </button>
-            </>
-          ) : (
-            <p className="hint">Select your name in the list, then press Enter or Space.</p>
-          )}
-        </aside>
       </div>
     </section>
   );
@@ -315,49 +315,28 @@ export default function PortalPage() {
       <main className="portal-main">
         <header className="portal-employee-header">
           <div className="portal-employee-header__text">
-            <p className="portal-eyebrow">Portal</p>
             <h1 className="portal-employee-title">Employee Break Portal</h1>
-          </div>
-          <div className="portal-instructions">
-            <div className="portal-instructions__block">
-              <h2>Topics</h2>
-              <ul>
-                <li>
-                  <strong>Meal Break</strong>
-                  <span>Daily limit: {board?.mealLimitMinutes ?? 60} minutes</span>
-                </li>
-                <li>
-                  <strong>Comfort Break</strong>
-                  <span>Daily limit: {board?.comfortLimitMinutes ?? 20} minutes</span>
-                </li>
-              </ul>
-            </div>
-            <div className="portal-instructions__block">
-              <h2>How to use</h2>
-              <ol>
-                <li>Choose the Meal Break or Comfort Break section</li>
-                <li>Search and select your name</li>
-                <li>Press <kbd>Enter</kbd> or <kbd>Space</kbd> to start or stop</li>
-              </ol>
-            </div>
+            <p className="portal-employee-meta">
+              Meal {board?.mealLimitMinutes ?? 60} min · Comfort {board?.comfortLimitMinutes ?? 20} min
+              {' · '}
+              <kbd>Enter</kbd> / <kbd>Space</kbd> to start or stop
+            </p>
           </div>
           <div className="portal-employee-header__actions">
-            <PortalClock size="large" />
-            <div className="portal-employee-header__login">
-              {isAuthenticated ? (
-                <button type="button" className="btn btn-primary" onClick={() => navigate('/app')}>
-                  Open staff console
-                </button>
-              ) : (
-                <button type="button" className="btn btn-primary" onClick={() => navigate('/login')}>
-                  Log in as HR Manager
-                </button>
-              )}
-              <div className="portal-onbreak-chip">
-                <span>On break</span>
-                <strong>{board?.onBreakCount ?? 0}</strong>
-              </div>
+            <PortalClock />
+            <div className="portal-onbreak-chip">
+              <span>On break</span>
+              <strong>{board?.onBreakCount ?? 0}</strong>
             </div>
+            {isAuthenticated ? (
+              <button type="button" className="btn btn-primary" onClick={() => navigate('/app')}>
+                Open staff console
+              </button>
+            ) : (
+              <button type="button" className="btn btn-primary" onClick={() => navigate('/login')}>
+                Log in as HR Manager
+              </button>
+            )}
           </div>
         </header>
 
