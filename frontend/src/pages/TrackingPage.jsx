@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import api from '../api/client';
+import api, { apiErrorMessage } from '../api/client';
 import { LoadingBlock, MessageBar, StatusBadge } from '../components/UiBits';
 import {
   BREAK_TYPES,
@@ -59,16 +59,25 @@ function BreakTypeBoard({
             <tbody>
               {employees.map((e) => {
                 const fields = typeFields(e, breakType);
+                const blocked = fields.blockedByOther;
                 return (
                   <tr
                     key={`${breakType}-${e.employeeId}`}
-                    className={`${selectedId === e.employeeId ? 'selected' : ''} ${fields.isOnThisBreak ? 'on-break' : ''}`}
-                    onClick={() => onSelect(e.employeeId)}
+                    className={[
+                      selectedId === e.employeeId ? 'selected' : '',
+                      fields.isOnThisBreak ? 'on-break' : '',
+                      blocked ? 'on-other-break' : '',
+                    ].filter(Boolean).join(' ')}
+                    aria-disabled={blocked ? 'true' : undefined}
+                    title={blocked ? `On ${e.currentBreakType} break — end that first` : undefined}
+                    onClick={() => {
+                      if (!blocked) onSelect(e.employeeId);
+                    }}
                   >
                     <td>{e.employeeCode}</td>
-                    <td>{e.fullName}</td>
+                    <td className="col-name">{e.fullName}</td>
                     <td>{e.departmentName}</td>
-                    <td>
+                    <td className={fields.isOnThisBreak ? 'is-live-total' : undefined}>
                       <strong>{fields.totalDisplay}</strong>
                       <div className="muted">{fields.totalSeconds}s</div>
                     </td>
@@ -76,7 +85,7 @@ function BreakTypeBoard({
                     <td>
                       {fields.isOnThisBreak
                         ? `On ${breakType.toLowerCase()} break (${formatElapsed(e.currentBreakElapsedSeconds)}) · out ${formatLocalClock(e.currentOutTime)}`
-                        : e.isOnBreak
+                        : blocked
                           ? `On ${e.currentBreakType} break`
                           : 'In office'}
                     </td>
@@ -162,12 +171,14 @@ export default function TrackingPage() {
   const [shiftId, setShiftId] = useState('');
   const [shiftId2, setShiftId2] = useState('');
   const [activeType, setActiveType] = useState(BREAK_TYPES.MEAL);
-  const [selectedId, setSelectedId] = useState(null);
+  const [selectedMealId, setSelectedMealId] = useState(null);
+  const [selectedComfortId, setSelectedComfortId] = useState(null);
   const [message, setMessage] = useState('');
   const [msgType, setMsgType] = useState('info');
   const [busy, setBusy] = useState(false);
   const [nowMs, setNowMs] = useState(Date.now());
   const searchRef = useRef(null);
+  const busyRef = useRef(false);
 
   const load = useCallback(async () => {
     const liveRes = await api.get('/breaks/live', {
@@ -200,7 +211,7 @@ export default function TrackingPage() {
       } catch (err) {
         if (!cancelled) {
           setMsgType('error');
-          setMessage(err.response?.data?.message || 'Failed to load live board.');
+          setMessage(apiErrorMessage(err, 'Failed to load live board.'));
         }
       }
     };
@@ -218,25 +229,38 @@ export default function TrackingPage() {
   }, []);
 
   const employeesView = useMemo(
-    () => enrichEmployeesLive(board?.employees, nowMs),
+    () => enrichEmployeesLive(board?.employees, nowMs, {
+      mealLimitMinutes: board?.mealLimitMinutes,
+      comfortLimitMinutes: board?.comfortLimitMinutes,
+    }),
     [board, nowMs],
   );
 
   useEffect(() => {
-    if (!selectedId) return;
-    if (!employeesView.some((e) => e.employeeId === selectedId)) setSelectedId(null);
-  }, [employeesView, selectedId]);
+    if (!board) return;
+    const mealEmp = employeesView.find((e) => e.employeeId === selectedMealId);
+    const comfortEmp = employeesView.find((e) => e.employeeId === selectedComfortId);
+    if (selectedMealId && (!mealEmp || typeFields(mealEmp, BREAK_TYPES.MEAL).blockedByOther)) {
+      setSelectedMealId(null);
+    }
+    if (selectedComfortId && (!comfortEmp || typeFields(comfortEmp, BREAK_TYPES.COMFORT).blockedByOther)) {
+      setSelectedComfortId(null);
+    }
+  }, [board, employeesView, selectedMealId, selectedComfortId]);
 
-  const capture = async (mode, breakType) => {
-    if (!selectedId) {
+  const capture = useCallback(async (mode, breakType) => {
+    if (busyRef.current) return;
+    const employeeId = breakType === BREAK_TYPES.MEAL ? selectedMealId : selectedComfortId;
+    if (!employeeId) {
       setMsgType('error');
       setMessage('Select an employee first.');
       return;
     }
+    busyRef.current = true;
     setBusy(true);
     try {
       const endpoint = mode === 'toggle' ? '/breaks/toggle' : mode === 'out' ? '/breaks/out' : '/breaks/in';
-      const { data } = await api.post(endpoint, { employeeId: selectedId, breakType });
+      const { data } = await api.post(endpoint, { employeeId, breakType });
       setMsgType('success');
       setMessage(
         data.isOnBreak
@@ -246,16 +270,16 @@ export default function TrackingPage() {
       await load();
     } catch (err) {
       setMsgType('error');
-      setMessage(err.response?.data?.message || 'Capture failed.');
+      setMessage(apiErrorMessage(err, 'Capture failed.'));
     } finally {
+      busyRef.current = false;
       setBusy(false);
     }
-  };
+  }, [selectedMealId, selectedComfortId, load]);
 
   useEffect(() => {
     const onKey = (e) => {
-      const tag = e.target?.tagName?.toLowerCase();
-      if (tag === 'input' || tag === 'select' || tag === 'textarea') return;
+      if (e.target?.closest('button, a, input, select, textarea')) return;
       if (e.key === 'Enter' || e.key === ' ') {
         e.preventDefault();
         capture('toggle', activeType);
@@ -272,8 +296,7 @@ export default function TrackingPage() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedId, busy, activeType]);
+  }, [capture, activeType]);
 
   if (!board && !message) return <LoadingBlock label="Loading live tracking…" />;
 
@@ -345,21 +368,17 @@ export default function TrackingPage() {
       </div>
 
       <div className="break-type-stack">
-        <div
-          className={`break-type-focus ${activeType === BREAK_TYPES.MEAL ? 'is-active' : ''}`}
-          onFocusCapture={() => setActiveType(BREAK_TYPES.MEAL)}
-          onMouseDown={() => setActiveType(BREAK_TYPES.MEAL)}
-        >
+        <div className={`break-type-focus ${activeType === BREAK_TYPES.MEAL ? 'is-active' : ''}`}>
           <BreakTypeBoard
             title="Meal Break"
             subtitle="Lunch / meal time tracking."
             breakType={BREAK_TYPES.MEAL}
             limitMinutes={board?.mealLimitMinutes}
             employees={employeesView}
-            selectedId={activeType === BREAK_TYPES.MEAL ? selectedId : null}
+            selectedId={selectedMealId}
             onSelect={(id) => {
               setActiveType(BREAK_TYPES.MEAL);
-              setSelectedId(id);
+              setSelectedMealId(id);
             }}
             onToggle={(t) => capture('toggle', t)}
             onOut={(t) => capture('out', t)}
@@ -369,21 +388,17 @@ export default function TrackingPage() {
           />
         </div>
 
-        <div
-          className={`break-type-focus ${activeType === BREAK_TYPES.COMFORT ? 'is-active' : ''}`}
-          onFocusCapture={() => setActiveType(BREAK_TYPES.COMFORT)}
-          onMouseDown={() => setActiveType(BREAK_TYPES.COMFORT)}
-        >
+        <div className={`break-type-focus ${activeType === BREAK_TYPES.COMFORT ? 'is-active' : ''}`}>
           <BreakTypeBoard
             title="Comfort Break"
             subtitle="Short comfort break tracking."
             breakType={BREAK_TYPES.COMFORT}
             limitMinutes={board?.comfortLimitMinutes}
             employees={employeesView}
-            selectedId={activeType === BREAK_TYPES.COMFORT ? selectedId : null}
+            selectedId={selectedComfortId}
             onSelect={(id) => {
               setActiveType(BREAK_TYPES.COMFORT);
-              setSelectedId(id);
+              setSelectedComfortId(id);
             }}
             onToggle={(t) => capture('toggle', t)}
             onOut={(t) => capture('out', t)}

@@ -16,7 +16,16 @@ public static class DbSeeder
         var roleManager = sp.GetRequiredService<RoleManager<IdentityRole>>();
         var config = sp.GetRequiredService<IConfiguration>();
 
-        await db.Database.MigrateAsync();
+        try
+        {
+            await db.Database.MigrateAsync();
+        }
+        catch (Exception)
+        {
+            // Existing databases may predate EF history. Additive schema below still applies.
+        }
+
+        await SchemaEnsure.ApplyAsync(db);
 
         foreach (var role in AppRoles.All)
         {
@@ -81,6 +90,30 @@ public static class DbSeeder
             "hrmanager", "hrmanager@local", "HR Manager", "HrManager@123");
         await EnsureUserAsync(userManager, config, "SeedUsers:HRAssistant", AppRoles.HRAssistant,
             "hrassistant", "hrassistant@local", "HR Assistant", "HrAssistant@123");
+
+        if (!await db.Shifts.AnyAsync())
+        {
+            db.Shifts.AddRange(
+                new Shift
+                {
+                    Name = "Day",
+                    StartTime = new TimeOnly(8, 0),
+                    EndTime = new TimeOnly(17, 0),
+                    SpansNextDay = false,
+                    IsActive = true,
+                    CreatedAt = DateTime.UtcNow
+                },
+                new Shift
+                {
+                    Name = "Night",
+                    StartTime = new TimeOnly(20, 0),
+                    EndTime = new TimeOnly(8, 0),
+                    SpansNextDay = true,
+                    IsActive = true,
+                    CreatedAt = DateTime.UtcNow
+                });
+            await db.SaveChangesAsync();
+        }
 
         if (!await db.Departments.AnyAsync())
         {

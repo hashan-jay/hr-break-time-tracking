@@ -81,6 +81,9 @@ export default function AuditReportDocument({ report }) {
           <thead>
             <tr>
               <th>When</th>
+              <th>Employee</th>
+              <th>Out time</th>
+              <th>In time</th>
               <th>User</th>
               <th>Action</th>
               <th>Entity</th>
@@ -91,6 +94,9 @@ export default function AuditReportDocument({ report }) {
             {(report.rows || []).map((row) => (
               <tr key={row.id}>
                 <td>{formatWhen(row.createdAt)}</td>
+                <td>{row.employeeName || '—'}</td>
+                <td>{formatWhen(row.outTime)}</td>
+                <td>{formatWhen(row.inTime)}</td>
                 <td>{row.userName || row.userId || '—'}</td>
                 <td>{row.action}</td>
                 <td>
@@ -102,7 +108,7 @@ export default function AuditReportDocument({ report }) {
             ))}
             {!report.rows?.length && (
               <tr>
-                <td colSpan={5}>No audit entries for the selected dates.</td>
+                <td colSpan={8}>No audit entries for the selected dates.</td>
               </tr>
             )}
           </tbody>
@@ -125,6 +131,9 @@ export function renderAuditReportHtml(report) {
   const detailRows = (report.rows || [])
     .map((row) => `<tr>
       <td>${escapeHtml(formatWhen(row.createdAt))}</td>
+      <td>${escapeHtml(row.employeeName || '—')}</td>
+      <td>${escapeHtml(formatWhen(row.outTime))}</td>
+      <td>${escapeHtml(formatWhen(row.inTime))}</td>
       <td>${escapeHtml(row.userName || row.userId || '—')}</td>
       <td>${escapeHtml(row.action)}</td>
       <td>${escapeHtml(`${row.entityType}${row.entityId ? ` #${row.entityId}` : ''}`)}</td>
@@ -154,11 +163,11 @@ export function renderAuditReportHtml(report) {
     <table>
       <thead>
         <tr>
-          <th>When</th><th>User</th><th>Action</th><th>Entity</th><th>Details</th>
+          <th>When</th><th>Employee</th><th>Out time</th><th>In time</th><th>User</th><th>Action</th><th>Entity</th><th>Details</th>
         </tr>
       </thead>
       <tbody>
-        ${detailRows || '<tr><td colspan="5">No audit entries for the selected dates.</td></tr>'}
+        ${detailRows || '<tr><td colspan="8">No audit entries for the selected dates.</td></tr>'}
       </tbody>
     </table>
     <div class="footer">

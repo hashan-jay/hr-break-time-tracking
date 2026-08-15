@@ -1,9 +1,12 @@
 using System.Text;
 using HRTimeTracking.Api.Data;
+using HRTimeTracking.Api.DTOs;
 using HRTimeTracking.Api.Models;
 using HRTimeTracking.Api.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
@@ -17,6 +20,17 @@ builder.Services.AddControllers()
         // Break out/in times and displays use PC local time (no UTC Z conversion).
         options.JsonSerializerOptions.Converters.Add(new LocalDateTimeJsonConverter());
         options.JsonSerializerOptions.Converters.Add(new NullableLocalDateTimeJsonConverter());
+    })
+    .ConfigureApiBehaviorOptions(options =>
+    {
+        options.InvalidModelStateResponseFactory = context =>
+        {
+            var first = context.ModelState.Values
+                .SelectMany(v => v.Errors)
+                .Select(e => string.IsNullOrWhiteSpace(e.ErrorMessage) ? e.Exception?.Message : e.ErrorMessage)
+                .FirstOrDefault(m => !string.IsNullOrWhiteSpace(m));
+            return new BadRequestObjectResult(new ApiMessage(first ?? "Invalid request."));
+        };
     });
 builder.Services.AddOpenApi();
 builder.Services.AddEndpointsApiExplorer();
@@ -134,6 +148,18 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
+app.UseExceptionHandler(errorApp =>
+{
+    errorApp.Run(async context =>
+    {
+        var error = context.Features.Get<IExceptionHandlerPathFeature>()?.Error;
+        context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+        context.Response.ContentType = "application/json";
+        var message = error?.InnerException?.Message ?? error?.Message ?? "Unexpected server error.";
+        await context.Response.WriteAsJsonAsync(new { message });
+    });
+});
+
 app.UseCors("Frontend");
 app.UseAuthentication();
 app.UseAuthorization();
@@ -149,7 +175,6 @@ catch (Exception ex)
     logger.LogError(ex,
         "Database migration or seed failed. Confirm SQL Server (SQLEXPRESS) is running and " +
         "ConnectionStrings:DefaultConnection points at Server=localhost\\SQLEXPRESS;Database=HRBreakTimeTracking.");
-    throw;
 }
 
 app.Run();

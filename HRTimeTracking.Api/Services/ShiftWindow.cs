@@ -49,9 +49,14 @@ public static class ShiftWindow
 
     /// <summary>
     /// Period that a break out-time belongs to (same rules as live tracking).
+    /// Out-times in the daytime gap of an overnight shift use the calendar day
+    /// so Start/End still records a visible session.
     /// </summary>
     public static ShiftPeriod ForOutTime(Shift? shift, DateTime outTime)
-        => Resolve(shift, outTime);
+    {
+        var period = Resolve(shift, outTime);
+        return period.Contains(outTime) ? period : CalendarDay(outTime);
+    }
 
     public static ShiftPeriod StartingOn(Shift shift, DateOnly startDate)
     {

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import api from '../api/client';
+import api, { apiErrorMessage } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import PortalClock from '../components/PortalClock';
 import { MessageBar, StatusBadge } from '../components/UiBits';
@@ -58,21 +58,32 @@ function PortalBreakSection({
               <tbody>
                 {employees.map((e) => {
                   const row = typeFields(e, breakType);
+                  const blocked = row.blockedByOther;
                   return (
                     <tr
                       key={`${breakType}-${e.employeeId}`}
-                      className={`${selectedId === e.employeeId ? 'selected' : ''} ${row.isOnThisBreak ? 'on-break' : ''}`}
-                      onClick={() => onSelect(e.employeeId)}
+                      className={[
+                        selectedId === e.employeeId ? 'selected' : '',
+                        row.isOnThisBreak ? 'on-break' : '',
+                        blocked ? 'on-other-break' : '',
+                      ].filter(Boolean).join(' ')}
+                      aria-disabled={blocked ? 'true' : undefined}
+                      title={blocked ? `On ${e.currentBreakType} break — end that first` : undefined}
+                      onClick={() => {
+                        if (!blocked) onSelect(e.employeeId);
+                      }}
                     >
                       <td className="col-code">{e.employeeCode}</td>
                       <td className="col-name">{e.fullName}</td>
                       <td>{e.departmentName}</td>
-                      <td className="col-today"><strong>{row.totalDisplay}</strong></td>
+                      <td className={`col-today ${row.isOnThisBreak ? 'is-live-total' : ''}`}>
+                        <strong>{row.totalDisplay}</strong>
+                      </td>
                       <td><StatusBadge status={row.status} color={row.statusColor} /></td>
                       <td>
                         {row.isOnThisBreak
                           ? `On break (${formatElapsed(e.currentBreakElapsedSeconds)})`
-                          : e.isOnBreak
+                          : blocked
                             ? `On ${e.currentBreakType}`
                             : 'In office'}
                       </td>
@@ -109,7 +120,7 @@ function PortalBreakSection({
               <button
                 type="button"
                 className={`btn ${onThisBreak ? 'btn-in' : 'btn-out'} btn-xl`}
-                disabled={busy || !apiOnline || blockedByOther}
+                disabled={busy || apiOnline === false || blockedByOther}
                 onClick={() => onToggle(breakType)}
               >
                 {onThisBreak
@@ -132,7 +143,8 @@ export default function PortalPage() {
   const [apiOnline, setApiOnline] = useState(null);
   const [board, setBoard] = useState(null);
   const [search, setSearch] = useState('');
-  const [selectedId, setSelectedId] = useState(null);
+  const [selectedMealId, setSelectedMealId] = useState(null);
+  const [selectedComfortId, setSelectedComfortId] = useState(null);
   const [activeType, setActiveType] = useState(BREAK_TYPES.MEAL);
   const [message, setMessage] = useState('');
   const [msgType, setMsgType] = useState('info');
@@ -142,6 +154,7 @@ export default function PortalPage() {
   const [shiftId, setShiftId] = useState('');
   const [shiftId2, setShiftId2] = useState('');
   const searchRef = useRef(null);
+  const busyRef = useRef(false);
 
   const checkApi = useCallback(async () => {
     try {
@@ -186,7 +199,7 @@ export default function PortalPage() {
       } catch (err) {
         if (!cancelled) {
           setMsgType('error');
-          setMessage(err.response?.data?.message || 'Could not load employee list.');
+          setMessage(apiErrorMessage(err, 'Could not load employee list.'));
         }
       }
     };
@@ -204,29 +217,42 @@ export default function PortalPage() {
   }, []);
 
   const employeesView = useMemo(
-    () => enrichEmployeesLive(board?.employees, nowMs),
+    () => enrichEmployeesLive(board?.employees, nowMs, {
+      mealLimitMinutes: board?.mealLimitMinutes,
+      comfortLimitMinutes: board?.comfortLimitMinutes,
+    }),
     [board, nowMs],
   );
 
   useEffect(() => {
-    if (!selectedId) return;
-    if (!employeesView.some((e) => e.employeeId === selectedId)) setSelectedId(null);
-  }, [employeesView, selectedId]);
+    if (!board) return;
+    const mealEmp = employeesView.find((e) => e.employeeId === selectedMealId);
+    const comfortEmp = employeesView.find((e) => e.employeeId === selectedComfortId);
+    if (selectedMealId && (!mealEmp || typeFields(mealEmp, BREAK_TYPES.MEAL).blockedByOther)) {
+      setSelectedMealId(null);
+    }
+    if (selectedComfortId && (!comfortEmp || typeFields(comfortEmp, BREAK_TYPES.COMFORT).blockedByOther)) {
+      setSelectedComfortId(null);
+    }
+  }, [board, employeesView, selectedMealId, selectedComfortId]);
 
-  const captureToggle = async (breakType) => {
-    if (!apiOnline) {
+  const captureToggle = useCallback(async (breakType) => {
+    if (busyRef.current) return;
+    if (apiOnline === false) {
       setMsgType('error');
       setMessage('API is offline. Start the backend first.');
       return;
     }
-    if (!selectedId) {
+    const employeeId = breakType === BREAK_TYPES.MEAL ? selectedMealId : selectedComfortId;
+    if (!employeeId) {
       setMsgType('error');
       setMessage('Select your name from the list first.');
       return;
     }
+    busyRef.current = true;
     setBusy(true);
     try {
-      const { data } = await api.post('/portal/toggle', { employeeId: selectedId, breakType });
+      const { data } = await api.post('/portal/toggle', { employeeId, breakType });
       setMsgType('success');
       const fields = typeFields(data, breakType);
       setMessage(
@@ -237,16 +263,16 @@ export default function PortalPage() {
       await loadBoard();
     } catch (err) {
       setMsgType('error');
-      setMessage(err.response?.data?.message || 'Could not record break time.');
+      setMessage(apiErrorMessage(err, 'Could not record break time.'));
     } finally {
+      busyRef.current = false;
       setBusy(false);
     }
-  };
+  }, [apiOnline, selectedMealId, selectedComfortId, loadBoard]);
 
   useEffect(() => {
     const onKey = (e) => {
-      const tag = e.target?.tagName?.toLowerCase();
-      if (tag === 'input' || tag === 'select' || tag === 'textarea') return;
+      if (e.target?.closest('button, a, input, select, textarea')) return;
       if (e.key === 'Enter' || e.key === ' ') {
         e.preventDefault();
         captureToggle(activeType);
@@ -257,8 +283,7 @@ export default function PortalPage() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedId, busy, apiOnline, activeType]);
+  }, [captureToggle, activeType]);
 
   return (
     <div className="portal-shell">
@@ -367,19 +392,16 @@ export default function PortalPage() {
         </p>
 
         <div className="break-type-stack">
-          <div
-            className={`break-type-focus ${activeType === BREAK_TYPES.MEAL ? 'is-active' : ''}`}
-            onMouseDown={() => setActiveType(BREAK_TYPES.MEAL)}
-          >
+          <div className={`break-type-focus ${activeType === BREAK_TYPES.MEAL ? 'is-active' : ''}`}>
             <PortalBreakSection
               title="Meal Break"
               breakType={BREAK_TYPES.MEAL}
               limitMinutes={board?.mealLimitMinutes}
               employees={employeesView}
-              selectedId={activeType === BREAK_TYPES.MEAL ? selectedId : null}
+              selectedId={selectedMealId}
               onSelect={(id) => {
                 setActiveType(BREAK_TYPES.MEAL);
-                setSelectedId(id);
+                setSelectedMealId(id);
               }}
               onToggle={captureToggle}
               busy={busy}
@@ -387,19 +409,16 @@ export default function PortalPage() {
             />
           </div>
 
-          <div
-            className={`break-type-focus ${activeType === BREAK_TYPES.COMFORT ? 'is-active' : ''}`}
-            onMouseDown={() => setActiveType(BREAK_TYPES.COMFORT)}
-          >
+          <div className={`break-type-focus ${activeType === BREAK_TYPES.COMFORT ? 'is-active' : ''}`}>
             <PortalBreakSection
               title="Comfort Break"
               breakType={BREAK_TYPES.COMFORT}
               limitMinutes={board?.comfortLimitMinutes}
               employees={employeesView}
-              selectedId={activeType === BREAK_TYPES.COMFORT ? selectedId : null}
+              selectedId={selectedComfortId}
               onSelect={(id) => {
                 setActiveType(BREAK_TYPES.COMFORT);
-                setSelectedId(id);
+                setSelectedComfortId(id);
               }}
               onToggle={captureToggle}
               busy={busy}

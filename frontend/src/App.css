@@ -811,12 +811,46 @@
   white-space: normal;
 }
 
-.portal-board__table .col-today {
+.col-today,
+td.is-live-total strong {
   font-variant-numeric: tabular-nums;
 }
 
-.portal-board__table tbody tr {
+td.is-live-total strong {
+  color: #b45309;
+}
+
+.portal-board__table tbody tr,
+.break-type-board tbody tr {
   cursor: pointer;
+}
+
+.portal-board__table tbody tr.on-other-break,
+.break-type-board tbody tr.on-other-break {
+  background: #f3f4f6;
+  color: #9ca3af;
+  cursor: not-allowed;
+  opacity: 0.78;
+}
+
+.portal-board__table tbody tr.on-other-break .col-name,
+.break-type-board tbody tr.on-other-break .col-name,
+.portal-board__table tbody tr.on-other-break td:nth-child(2),
+.break-type-board tbody tr.on-other-break td:nth-child(2) {
+  color: #9ca3af;
+  font-weight: 600;
+}
+
+.portal-shell tbody tr.on-other-break:hover,
+.app-portal tbody tr.on-other-break:hover,
+tbody tr.on-other-break:hover {
+  background: #f3f4f6;
+}
+
+.portal-shell tbody tr.on-other-break.selected,
+.app-portal tbody tr.on-other-break.selected,
+tbody tr.on-other-break.selected {
+  background: #f3f4f6;
 }
 
 .portal-capture {

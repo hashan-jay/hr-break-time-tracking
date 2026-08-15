@@ -20,17 +20,24 @@ public class AuditService : IAuditService
 
     public async Task LogAsync(string? userId, string action, string entityType, string? entityId, string? details, string? ipAddress = null)
     {
-        _db.AuditLogs.Add(new AuditLog
+        try
         {
-            UserId = userId,
-            Action = action,
-            EntityType = entityType,
-            EntityId = entityId,
-            Details = details,
-            IpAddress = ipAddress,
-            CreatedAt = DateTime.UtcNow
-        });
-        await _db.SaveChangesAsync();
+            _db.AuditLogs.Add(new AuditLog
+            {
+                UserId = userId,
+                Action = action,
+                EntityType = entityType,
+                EntityId = entityId,
+                Details = details is { Length: > 2000 } ? details[..2000] : details,
+                IpAddress = ipAddress,
+                CreatedAt = DateTime.UtcNow
+            });
+            await _db.SaveChangesAsync();
+        }
+        catch
+        {
+            // Never fail break capture / login because audit insert failed.
+        }
     }
 }
 

@@ -18,15 +18,32 @@ api.interceptors.response.use(
   (error) => {
     if (error.response?.status === 401) {
       const path = window.location.pathname;
-      // Public portal must stay open without login.
       if (path.startsWith('/app')) {
         localStorage.removeItem('hr_token');
         localStorage.removeItem('hr_user');
-        window.location.href = '/';
+        window.location.href = '/login';
       }
     }
     return Promise.reject(error);
   },
 );
+
+export function apiErrorMessage(error, fallback = 'Request failed.') {
+  const data = error?.response?.data;
+  if (!data) {
+    if (error?.code === 'ECONNABORTED') return 'The server took too long to respond.';
+    if (error?.message === 'Network Error') return 'Cannot reach the API. Confirm the backend is running on port 5085.';
+    return error?.message || fallback;
+  }
+  if (typeof data === 'string' && data.trim()) return data;
+  if (data.message) return data.message;
+  if (data.detail) return data.detail;
+  if (data.title) return data.title;
+  if (data.errors && typeof data.errors === 'object') {
+    const first = Object.values(data.errors).flat().find(Boolean);
+    if (first) return String(first);
+  }
+  return fallback;
+}
 
 export default api;

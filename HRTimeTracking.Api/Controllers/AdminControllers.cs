@@ -167,12 +167,55 @@ public class AuditController : ControllerBase
             }
         }
 
+        var sessionIds = logs
+            .Where(a => string.Equals(a.EntityType, "BreakSession", StringComparison.OrdinalIgnoreCase)
+                        && int.TryParse(a.EntityId, out _))
+            .Select(a => int.Parse(a.EntityId!))
+            .Distinct()
+            .ToList();
+
+        var sessions = new Dictionary<int, (string EmployeeName, DateTime OutTime, DateTime? InTime)>();
+        if (sessionIds.Count > 0)
+        {
+            var found = await _db.BreakSessions.AsNoTracking()
+                .Include(s => s.Employee)
+                .Where(s => sessionIds.Contains(s.Id))
+                .Select(s => new
+                {
+                    s.Id,
+                    EmployeeName = s.Employee.FullName + " (" + s.Employee.EmployeeCode + ")",
+                    s.OutTime,
+                    s.InTime
+                })
+                .ToListAsync();
+
+            foreach (var item in found)
+            {
+                sessions[item.Id] = (
+                    item.EmployeeName,
+                    TimeDisplay.AsLocal(item.OutTime),
+                    TimeDisplay.AsLocal(item.InTime));
+            }
+        }
+
         var rows = new List<AuditReportRowDto>(logs.Count);
         foreach (var entry in logs)
         {
             string? userName = null;
             if (!string.IsNullOrWhiteSpace(entry.UserId))
                 userNames.TryGetValue(entry.UserId, out userName);
+
+            string? employeeName = null;
+            DateTime? outTime = null;
+            DateTime? inTime = null;
+            if (string.Equals(entry.EntityType, "BreakSession", StringComparison.OrdinalIgnoreCase)
+                && int.TryParse(entry.EntityId, out var sessionId)
+                && sessions.TryGetValue(sessionId, out var session))
+            {
+                employeeName = session.EmployeeName;
+                outTime = session.OutTime;
+                inTime = session.InTime;
+            }
 
             rows.Add(new AuditReportRowDto(
                 entry.Id,
@@ -183,7 +226,10 @@ public class AuditController : ControllerBase
                 entry.EntityId,
                 entry.Details,
                 TimeDisplay.FromStoredUtc(entry.CreatedAt),
-                entry.IpAddress));
+                entry.IpAddress,
+                employeeName,
+                outTime,
+                inTime));
         }
 
         var actionCounts = rows

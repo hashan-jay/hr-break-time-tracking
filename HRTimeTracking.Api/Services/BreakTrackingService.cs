@@ -81,9 +81,10 @@ public class BreakTrackingService : IBreakTrackingService
 
         var statuses = employees.Select(e =>
         {
-            var period = ShiftWindow.Resolve(e.Shift, now);
+            var period = ShiftWindow.ForOutTime(e.Shift, now);
             var inPeriod = sessions
-                .Where(s => s.EmployeeId == e.Id && ShiftWindow.StartedIn(s.OutTime, period))
+                .Where(s => s.EmployeeId == e.Id &&
+                            (ShiftWindow.StartedIn(s.OutTime, period) || s.InTime is null))
                 .ToList();
             return BuildStatus(e, inPeriod, now, comfortLimit, mealLimit);
         }).ToList();
@@ -95,7 +96,7 @@ public class BreakTrackingService : IBreakTrackingService
         {
             var selected = employees.Select(e => e.Shift).FirstOrDefault(s => s is not null && s.Id == shiftIds[0])
                 ?? await _db.Shifts.AsNoTracking().FirstOrDefaultAsync(s => s.Id == shiftIds[0]);
-            var period = ShiftWindow.Resolve(selected, now);
+            var period = ShiftWindow.ForOutTime(selected, now);
             periodStart = period.Start;
             periodEnd = period.End;
             periodLabel = ShiftWindow.FormatLabel(selected, period);
@@ -129,12 +130,13 @@ public class BreakTrackingService : IBreakTrackingService
         if (employee is null) return null;
 
         var now = TimeDisplay.NowLocal();
-        var period = ShiftWindow.Resolve(employee.Shift, now);
+        var period = ShiftWindow.ForOutTime(employee.Shift, now);
         var comfortLimit = await _settings.GetComfortLimitMinutesAsync();
         var mealLimit = await _settings.GetMealLimitMinutesAsync();
+        var lookback = now.Date.AddDays(-2);
         var sessions = await _db.BreakSessions.AsNoTracking()
             .Where(b => b.EmployeeId == employeeId &&
-                        (b.InTime == null || b.OutTime >= period.Start.AddDays(-1)))
+                        (b.InTime == null || b.OutTime >= lookback))
             .ToListAsync();
 
         foreach (var session in sessions)
@@ -145,7 +147,7 @@ public class BreakTrackingService : IBreakTrackingService
                 session.BreakType = BreakTypes.Comfort;
         }
 
-        var inPeriod = sessions.Where(s => ShiftWindow.StartedIn(s.OutTime, period)).ToList();
+        var inPeriod = sessions.Where(s => ShiftWindow.StartedIn(s.OutTime, period) || s.InTime is null).ToList();
         return BuildStatus(employee, inPeriod, now, comfortLimit, mealLimit);
     }
 
@@ -184,7 +186,7 @@ public class BreakTrackingService : IBreakTrackingService
         }
 
         var now = TimeDisplay.NowLocal();
-        var period = ShiftWindow.Resolve(employee.Shift, now);
+        var period = ShiftWindow.ForOutTime(employee.Shift, now);
         var session = new BreakSession
         {
             EmployeeId = employeeId,
@@ -197,7 +199,7 @@ public class BreakTrackingService : IBreakTrackingService
         _db.BreakSessions.Add(session);
         await _db.SaveChangesAsync();
         await _audit.LogAsync(userId, "BreakOut", "BreakSession", session.Id.ToString(),
-            $"{type} out-time recorded for {employee.FullName} ({employee.EmployeeCode}) at {TimeDisplay.FormatLocalClock(now)} (local).");
+            $"Employee: {employee.FullName} ({employee.EmployeeCode}). {type} out: {TimeDisplay.FormatLocalDateClock(now)}. In: —.");
 
         return (true, null, await GetEmployeeStatusAsync(employeeId));
     }
@@ -238,7 +240,7 @@ public class BreakTrackingService : IBreakTrackingService
             open.BreakType = BreakTypes.Comfort;
         await _db.SaveChangesAsync();
         await _audit.LogAsync(userId, "BreakIn", "BreakSession", open.Id.ToString(),
-            $"{openType} in-time recorded for {employee.FullName} ({employee.EmployeeCode}) at {TimeDisplay.FormatLocalClock(now)} (local). Duration {TimeDisplay.FormatSeconds(durationSeconds)} ({durationSeconds} seconds).");
+            $"Employee: {employee.FullName} ({employee.EmployeeCode}). {openType} out: {TimeDisplay.FormatLocalDateClock(open.OutTime)}. In: {TimeDisplay.FormatLocalDateClock(now)}. Duration {TimeDisplay.FormatSeconds(durationSeconds)}.");
 
         return (true, null, await GetEmployeeStatusAsync(employeeId));
     }
@@ -309,16 +311,24 @@ public class BreakTrackingService : IBreakTrackingService
         var mealSessions = sessions.Where(s =>
             BreakTypes.Meal.Equals(s.BreakType, StringComparison.OrdinalIgnoreCase)).ToList();
 
-        var comfortTotal = TimeDisplay.ComputeDailyTotalSeconds(comfortSessions, localNow);
-        var mealTotal = TimeDisplay.ComputeDailyTotalSeconds(mealSessions, localNow);
-        var (comfortStatus, comfortColor) = BreakStatusCodes.FromTotalSeconds(comfortTotal, comfortLimitMinutes);
-        var (mealStatus, mealColor) = BreakStatusCodes.FromTotalSeconds(mealTotal, mealLimitMinutes);
+        var comfortClosedSessions = comfortSessions.Where(s => s.InTime.HasValue).ToList();
+        var mealClosedSessions = mealSessions.Where(s => s.InTime.HasValue).ToList();
+        var comfortClosed = TimeDisplay.ComputeShiftTotalSeconds(comfortClosedSessions, localNow);
+        var mealClosed = TimeDisplay.ComputeShiftTotalSeconds(mealClosedSessions, localNow);
 
         var open = sessions.FirstOrDefault(s => s.InTime is null);
         var openType = open is null
             ? null
             : (string.IsNullOrWhiteSpace(open.BreakType) ? BreakTypes.Comfort : BreakTypes.Normalize(open.BreakType));
         var openOut = open is null ? (DateTime?)null : TimeDisplay.AsLocal(open.OutTime);
+        var openSeconds = openOut is null ? 0 : TimeDisplay.ElapsedSeconds(openOut.Value, localNow);
+        var comfortOpen = BreakTypes.Comfort.Equals(openType, StringComparison.OrdinalIgnoreCase) ? openSeconds : 0;
+        var mealOpen = BreakTypes.Meal.Equals(openType, StringComparison.OrdinalIgnoreCase) ? openSeconds : 0;
+
+        var comfortTotal = comfortClosed + comfortOpen;
+        var mealTotal = mealClosed + mealOpen;
+        var (comfortStatus, comfortColor) = BreakStatusCodes.FromTotalSeconds(comfortTotal, comfortLimitMinutes);
+        var (mealStatus, mealColor) = BreakStatusCodes.FromTotalSeconds(mealTotal, mealLimitMinutes);
 
         return new EmployeeBreakStatusDto(
             employee.Id,
@@ -330,15 +340,17 @@ public class BreakTrackingService : IBreakTrackingService
             TimeDisplay.FormatSeconds(comfortTotal),
             comfortStatus,
             comfortColor,
-            comfortSessions.Count(s => s.InTime.HasValue),
+            comfortClosedSessions.Count,
             mealTotal,
             TimeDisplay.FormatSeconds(mealTotal),
             mealStatus,
             mealColor,
-            mealSessions.Count(s => s.InTime.HasValue),
+            mealClosedSessions.Count,
             open is not null,
             openType,
             openOut,
-            openOut is null ? null : TimeDisplay.ElapsedSeconds(openOut.Value, localNow));
+            openOut is null ? null : openSeconds,
+            comfortClosed,
+            mealClosed);
     }
 }

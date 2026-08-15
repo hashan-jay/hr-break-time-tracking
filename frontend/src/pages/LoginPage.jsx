@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import { MessageBar } from '../components/UiBits';
+import { apiErrorMessage } from '../api/client';
 
 export default function LoginPage() {
   const { login, isAuthenticated, loading } = useAuth();
@@ -22,7 +23,7 @@ export default function LoginPage() {
       await login(userName, password);
       navigate('/app');
     } catch (err) {
-      setMessage(err.response?.data?.message || 'Login failed. Check username and password.');
+      setMessage(apiErrorMessage(err, 'Login failed. Check username and password.'));
     } finally {
       setBusy(false);
     }

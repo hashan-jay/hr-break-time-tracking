@@ -62,10 +62,16 @@ public class ReportService : IReportService
             }
         }
 
+        var fromStart = from.AddDays(-1).ToDateTime(TimeOnly.MinValue, DateTimeKind.Local);
+        var toEnd = to.AddDays(2).ToDateTime(TimeOnly.MinValue, DateTimeKind.Local);
+
         var sessionsQuery = _db.BreakSessions.AsNoTracking()
             .Include(b => b.Employee).ThenInclude(e => e.Department)
             .Include(b => b.Employee).ThenInclude(e => e.Shift)
-            .Where(b => b.BreakDate >= from.AddDays(-1) && b.BreakDate <= to.AddDays(1) && !b.Employee.IsDeleted);
+            .Where(b => !b.Employee.IsDeleted &&
+                        (b.InTime == null ||
+                         (b.BreakDate >= from.AddDays(-1) && b.BreakDate <= to.AddDays(1)) ||
+                         (b.OutTime >= fromStart && b.OutTime < toEnd)));
 
         if (departmentId.HasValue)
             sessionsQuery = sessionsQuery.Where(b => b.Employee.DepartmentId == departmentId.Value);
@@ -116,8 +122,8 @@ public class ReportService : IReportService
                 var mealSessions = periodSessions.Where(s =>
                     BreakTypes.Meal.Equals(s.BreakType, StringComparison.OrdinalIgnoreCase)).ToList();
 
-                var comfortTotal = TimeDisplay.ComputeDailyTotalSeconds(comfortSessions, reference);
-                var mealTotal = TimeDisplay.ComputeDailyTotalSeconds(mealSessions, reference);
+                var comfortTotal = TimeDisplay.ComputeShiftTotalSeconds(comfortSessions, reference);
+                var mealTotal = TimeDisplay.ComputeShiftTotalSeconds(mealSessions, reference);
                 var (comfortStatus, comfortColor) = BreakStatusCodes.FromTotalSeconds(comfortTotal, comfortLimit);
                 var (mealStatus, mealColor) = BreakStatusCodes.FromTotalSeconds(mealTotal, mealLimit);
 

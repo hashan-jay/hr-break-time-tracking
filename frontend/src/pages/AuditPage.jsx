@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import api from '../api/client';
+import api, { apiErrorMessage } from '../api/client';
 import AuditReportDocument, { renderAuditReportHtml } from '../components/AuditReportDocument';
 import { MessageBar } from '../components/UiBits';
 import { downloadHtmlReport } from '../lib/downloadReport';
@@ -53,7 +53,7 @@ export default function AuditPage() {
       setMessage('');
     } catch (err) {
       setMsgType('error');
-      setMessage(err.response?.data?.message || 'Failed to generate audit report.');
+      setMessage(apiErrorMessage(err, 'Failed to generate audit report.'));
     } finally {
       setBusy(false);
     }
@@ -66,9 +66,12 @@ export default function AuditPage() {
 
   const exportCsv = () => {
     if (!report?.rows?.length) return;
-    const header = ['When', 'User', 'UserId', 'Action', 'EntityType', 'EntityId', 'Details', 'IpAddress'];
+    const header = ['When', 'Employee', 'OutTime', 'InTime', 'User', 'UserId', 'Action', 'EntityType', 'EntityId', 'Details', 'IpAddress'];
     const lines = report.rows.map((r) => [
       `"${formatWhen(r.createdAt)}"`,
+      `"${(r.employeeName || '').replaceAll('"', '""')}"`,
+      `"${formatWhen(r.outTime)}"`,
+      `"${formatWhen(r.inTime)}"`,
       `"${(r.userName || '').replaceAll('"', '""')}"`,
       `"${r.userId || ''}"`,
       `"${r.action}"`,
@@ -188,6 +191,9 @@ export default function AuditPage() {
               <thead>
                 <tr>
                   <th>When</th>
+                  <th>Employee</th>
+                  <th>Out time</th>
+                  <th>In time</th>
                   <th>User</th>
                   <th>Action</th>
                   <th>Entity</th>
@@ -198,6 +204,9 @@ export default function AuditPage() {
                 {report.rows.map((row) => (
                   <tr key={row.id}>
                     <td>{formatWhen(row.createdAt)}</td>
+                    <td>{row.employeeName || '—'}</td>
+                    <td>{formatWhen(row.outTime)}</td>
+                    <td>{formatWhen(row.inTime)}</td>
                     <td>{row.userName || row.userId || '—'}</td>
                     <td>{row.action}</td>
                     <td>
@@ -209,7 +218,7 @@ export default function AuditPage() {
                 ))}
                 {!report.rows.length && (
                   <tr>
-                    <td colSpan={5} className="empty">No audit entries for the selected dates.</td>
+                    <td colSpan={8} className="empty">No audit entries for the selected dates.</td>
                   </tr>
                 )}
               </tbody>

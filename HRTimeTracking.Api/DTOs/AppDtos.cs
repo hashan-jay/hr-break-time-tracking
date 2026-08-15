@@ -136,7 +136,9 @@ public record EmployeeBreakStatusDto(
     bool IsOnBreak,
     string? CurrentBreakType,
     DateTime? CurrentOutTime,
-    int? CurrentBreakElapsedSeconds)
+    int? CurrentBreakElapsedSeconds,
+    int ComfortClosedSeconds = 0,
+    int MealClosedSeconds = 0)
 {
     public bool IsOnComfortBreak => IsOnBreak && CurrentBreakType == BreakTypes.Comfort;
     public bool IsOnMealBreak => IsOnBreak && CurrentBreakType == BreakTypes.Meal;
@@ -240,7 +242,10 @@ public record AuditReportRowDto(
     string? EntityId,
     string? Details,
     DateTime CreatedAt,
-    string? IpAddress);
+    string? IpAddress,
+    string? EmployeeName = null,
+    DateTime? OutTime = null,
+    DateTime? InTime = null);
 
 public record AuditActionCountDto(string Action, int Count);
 

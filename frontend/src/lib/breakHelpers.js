@@ -40,28 +40,48 @@ export function liveElapsedSeconds(outTime, nowMs) {
   return Math.max(0, Math.floor((nowMs - out.getTime()) / 1000));
 }
 
-/** Recompute open-session elapsed against Meal or Comfort totals. */
-export function enrichEmployeesLive(list, nowMs) {
+export function statusFromTotal(totalSeconds, limitMinutes) {
+  const limitSeconds = Math.max(0, Number(limitMinutes) || 0) * 60;
+  if (totalSeconds <= limitSeconds) {
+    return { status: 'WELL SATISFIED', statusColor: 'green' };
+  }
+  return { status: 'EXCEEDED BREAK TIME LIMIT', statusColor: 'red' };
+}
+
+/**
+ * This-shift total:
+ *   closed (In − Out) + live (Now − Out) while a break is open.
+ */
+export function shiftTotalSeconds(employee, breakType, nowMs) {
+  const isMeal = breakType === BREAK_TYPES.MEAL;
+  const closed = isMeal
+    ? (employee.mealClosedSeconds ?? Math.max(0, (employee.mealBreakSecondsToday || 0) - (employee.currentBreakElapsedSeconds || 0)))
+    : (employee.comfortClosedSeconds ?? Math.max(0, (employee.comfortBreakSecondsToday || 0) - (employee.currentBreakElapsedSeconds || 0)));
+  const onThisBreak = employee.isOnBreak && employee.currentBreakType === breakType;
+  const open = onThisBreak ? liveElapsedSeconds(employee.currentOutTime, nowMs) : 0;
+  return Math.max(0, closed + open);
+}
+
+/** Recompute open-session elapsed against Meal or Comfort totals every tick. */
+export function enrichEmployeesLive(list, nowMs, limits = {}) {
   return (list || []).map((e) => {
-    if (!e.isOnBreak || !e.currentOutTime) return e;
-    const openSeconds = liveElapsedSeconds(e.currentOutTime, nowMs);
-    const type = e.currentBreakType;
-    const next = {
+    const mealTotal = shiftTotalSeconds(e, BREAK_TYPES.MEAL, nowMs);
+    const comfortTotal = shiftTotalSeconds(e, BREAK_TYPES.COMFORT, nowMs);
+    const mealStatus = statusFromTotal(mealTotal, limits.mealLimitMinutes);
+    const comfortStatus = statusFromTotal(comfortTotal, limits.comfortLimitMinutes);
+    const onBreak = Boolean(e.isOnBreak && e.currentOutTime);
+    return {
       ...e,
-      currentBreakElapsedSeconds: openSeconds,
+      currentBreakElapsedSeconds: onBreak ? liveElapsedSeconds(e.currentOutTime, nowMs) : 0,
+      mealBreakSecondsToday: mealTotal,
+      mealBreakDisplay: formatElapsed(mealTotal),
+      mealStatus: mealStatus.status,
+      mealStatusColor: mealStatus.statusColor,
+      comfortBreakSecondsToday: comfortTotal,
+      comfortBreakDisplay: formatElapsed(comfortTotal),
+      comfortStatus: comfortStatus.status,
+      comfortStatusColor: comfortStatus.statusColor,
     };
-    if (type === BREAK_TYPES.MEAL) {
-      const closed = Math.max(0, (e.mealBreakSecondsToday || 0) - (e.currentBreakElapsedSeconds || 0));
-      const total = closed + openSeconds;
-      next.mealBreakSecondsToday = total;
-      next.mealBreakDisplay = formatElapsed(total);
-    } else {
-      const closed = Math.max(0, (e.comfortBreakSecondsToday || 0) - (e.currentBreakElapsedSeconds || 0));
-      const total = closed + openSeconds;
-      next.comfortBreakSecondsToday = total;
-      next.comfortBreakDisplay = formatElapsed(total);
-    }
-    return next;
   });
 }
 
@@ -73,6 +93,7 @@ export function typeFields(employee, breakType) {
       status: employee.mealStatus,
       statusColor: employee.mealStatusColor,
       isOnThisBreak: employee.isOnBreak && employee.currentBreakType === BREAK_TYPES.MEAL,
+      blockedByOther: Boolean(employee.isOnBreak && employee.currentBreakType !== BREAK_TYPES.MEAL),
     };
   }
   return {
@@ -81,6 +102,7 @@ export function typeFields(employee, breakType) {
     status: employee.comfortStatus,
     statusColor: employee.comfortStatusColor,
     isOnThisBreak: employee.isOnBreak && employee.currentBreakType === BREAK_TYPES.COMFORT,
+    blockedByOther: Boolean(employee.isOnBreak && employee.currentBreakType !== BREAK_TYPES.COMFORT),
   };
 }
 

@@ -1,8 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import api from '../api/client';
+import api, { apiErrorMessage } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
-import { LoadingBlock, MessageBar } from '../components/UiBits';
+import { LoadingBlock, MessageBar, StatusBadge } from '../components/UiBits';
+import {
+  BREAK_TYPES,
+  enrichEmployeesLive,
+  formatElapsed,
+  typeFields,
+} from '../lib/breakHelpers';
 
 const KPI_ICONS = {
   users: (
@@ -92,6 +98,8 @@ function welcomeCopy(auth) {
 export default function DashboardPage() {
   const auth = useAuth();
   const [data, setData] = useState(null);
+  const [board, setBoard] = useState(null);
+  const [nowMs, setNowMs] = useState(Date.now());
   const [message, setMessage] = useState('');
   const copy = useMemo(
     () => welcomeCopy(auth),
@@ -102,17 +110,38 @@ export default function DashboardPage() {
     let timer;
     const load = async () => {
       try {
-        const res = await api.get('/reports/dashboard');
-        setData(res.data);
+        const dashRes = await api.get('/reports/dashboard');
+        setData(dashRes.data);
+        if (auth.canTrackBreaks) {
+          try {
+            const liveRes = await api.get('/breaks/live');
+            setBoard(liveRes.data);
+          } catch {
+            setBoard(null);
+          }
+        }
         setMessage('');
       } catch (err) {
-        setMessage(err.response?.data?.message || 'Failed to load dashboard.');
+        setMessage(apiErrorMessage(err, 'Failed to load dashboard.'));
       }
     };
     load();
     timer = setInterval(load, 5000);
     return () => clearInterval(timer);
+  }, [auth.canTrackBreaks]);
+
+  useEffect(() => {
+    const tick = setInterval(() => setNowMs(Date.now()), 1000);
+    return () => clearInterval(tick);
   }, []);
+
+  const employeesView = useMemo(
+    () => enrichEmployeesLive(board?.employees, nowMs, {
+      mealLimitMinutes: board?.mealLimitMinutes ?? data?.mealLimitMinutes,
+      comfortLimitMinutes: board?.comfortLimitMinutes ?? data?.comfortLimitMinutes,
+    }),
+    [board, data, nowMs],
+  );
 
   if (!data && !message) return <LoadingBlock label="Loading dashboard…" />;
 
@@ -171,6 +200,58 @@ export default function DashboardPage() {
               </section>
             </section>
           </div>
+
+          {employeesView.length > 0 && (
+            <section className="portal-quick-section">
+              <div className="portal-section-head">
+                <h2>This shift totals</h2>
+                <p>
+                  Total = closed (in − out) + live timer while a break is open. Meal and Comfort
+                  are counted separately for the current shift window.
+                </p>
+              </div>
+              <div className="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Code</th>
+                      <th>Employee</th>
+                      <th>Meal this shift</th>
+                      <th>Meal status</th>
+                      <th>Comfort this shift</th>
+                      <th>Comfort status</th>
+                      <th>State</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {employeesView.map((e) => {
+                      const meal = typeFields(e, BREAK_TYPES.MEAL);
+                      const comfort = typeFields(e, BREAK_TYPES.COMFORT);
+                      return (
+                        <tr key={e.employeeId} className={e.isOnBreak ? 'on-break' : ''}>
+                          <td>{e.employeeCode}</td>
+                          <td>{e.fullName}</td>
+                          <td className={meal.isOnThisBreak ? 'is-live-total' : undefined}>
+                            <strong>{meal.totalDisplay}</strong>
+                          </td>
+                          <td><StatusBadge status={meal.status} color={meal.statusColor} /></td>
+                          <td className={comfort.isOnThisBreak ? 'is-live-total' : undefined}>
+                            <strong>{comfort.totalDisplay}</strong>
+                          </td>
+                          <td><StatusBadge status={comfort.status} color={comfort.statusColor} /></td>
+                          <td>
+                            {e.isOnBreak
+                              ? `On ${e.currentBreakType} (${formatElapsed(e.currentBreakElapsedSeconds)})`
+                              : 'In office'}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          )}
 
           <section className="portal-quick-section">
             <div className="portal-section-head">

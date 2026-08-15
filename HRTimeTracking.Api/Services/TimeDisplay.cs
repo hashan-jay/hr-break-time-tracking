@@ -58,9 +58,16 @@ public static class TimeDisplay
     }
 
     /// <summary>
-    /// Break total in seconds for the supplied sessions: closed out/in durations
-    /// plus live elapsed seconds for any open session.
+    /// Break total in seconds for one Meal or Comfort type in a shift window:
+    ///   closed = Σ (InTime − OutTime)
+    ///   open   = (Now − OutTime) when a session has no InTime
+    ///   total  = closed + open
+    /// Out/in timestamps in the database are the source of truth.
     /// </summary>
+    public static int ComputeShiftTotalSeconds(IEnumerable<Models.BreakSession> sessions, DateTime? now = null)
+        => ComputeDailyTotalSeconds(sessions, now);
+
+    /// <inheritdoc cref="ComputeShiftTotalSeconds"/>
     public static int ComputeDailyTotalSeconds(IEnumerable<Models.BreakSession> sessions, DateTime? now = null)
     {
         var reference = AsLocal(now ?? NowLocal());
@@ -94,6 +101,9 @@ public static class TimeDisplay
 
     public static string FormatLocalClock(DateTime value)
         => AsLocal(value).ToString("HH:mm:ss", CultureInfo.InvariantCulture);
+
+    public static string FormatLocalDateClock(DateTime value)
+        => AsLocal(value).ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
 }
 
 public sealed class LocalDateTimeJsonConverter : JsonConverter<DateTime>

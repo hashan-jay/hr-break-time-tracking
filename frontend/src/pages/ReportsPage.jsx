@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import api from '../api/client';
+import api, { apiErrorMessage } from '../api/client';
 import { MessageBar, StatusBadge } from '../components/UiBits';
 import { useAuth } from '../auth/AuthContext';
 import BreakReportDocument, { renderBreakReportHtml } from '../components/BreakReportDocument';
@@ -38,7 +38,7 @@ export default function ReportsPage() {
       setShifts(s.data);
     }).catch((err) => {
       setMsgType('error');
-      setMessage(err.response?.data?.message || 'Failed to load filters.');
+      setMessage(apiErrorMessage(err, 'Failed to load filters.'));
     });
   }, []);
 
@@ -66,7 +66,7 @@ export default function ReportsPage() {
       setMessage('');
     } catch (err) {
       setMsgType('error');
-      setMessage(err.response?.data?.message || 'Failed to generate report.');
+      setMessage(apiErrorMessage(err, 'Failed to generate report.'));
     }
   };
 
