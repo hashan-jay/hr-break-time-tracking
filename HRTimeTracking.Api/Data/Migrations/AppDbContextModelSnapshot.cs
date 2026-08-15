@@ -157,6 +157,11 @@ namespace HRTimeTracking.Api.Data.Migrations
                     b.Property<DateOnly>("BreakDate")
                         .HasColumnType("date");
 
+                    b.Property<string>("BreakType")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
                     b.Property<string>("ClosedByUserId")
                         .HasMaxLength(450)
                         .HasColumnType("nvarchar(450)");
@@ -189,6 +194,8 @@ namespace HRTimeTracking.Api.Data.Migrations
                     b.HasIndex("EmployeeId", "BreakDate");
 
                     b.HasIndex("EmployeeId", "InTime");
+
+                    b.HasIndex("EmployeeId", "BreakType", "BreakDate");
 
                     b.ToTable("BreakSessions");
                 });

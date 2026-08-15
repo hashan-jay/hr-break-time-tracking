@@ -29,9 +29,49 @@ public static class DbSeeder
             db.SystemSettings.Add(new SystemSetting
             {
                 Key = Services.SettingsService.DailyLimitKey,
-                Value = BreakStatusCodes.DefaultDailyLimitMinutes.ToString(),
-                Description = "Maximum allowed daily break time in minutes."
+                Value = BreakStatusCodes.DefaultComfortLimitMinutes.ToString(),
+                Description = "Legacy alias of Comfort break daily limit (minutes). Kept in sync with ComfortBreakLimitMinutes."
             });
+            await db.SaveChangesAsync();
+        }
+
+        // Additive: Meal + Comfort limits. Never overwrite existing values.
+        var legacyDaily = await db.SystemSettings.AsNoTracking()
+            .Where(s => s.Key == Services.SettingsService.DailyLimitKey)
+            .Select(s => s.Value)
+            .FirstOrDefaultAsync();
+        var comfortSeed = int.TryParse(legacyDaily, out var legacyMinutes)
+            ? legacyMinutes.ToString()
+            : BreakStatusCodes.DefaultComfortLimitMinutes.ToString();
+
+        if (!await db.SystemSettings.AnyAsync(s => s.Key == Services.SettingsService.ComfortLimitKey))
+        {
+            db.SystemSettings.Add(new SystemSetting
+            {
+                Key = Services.SettingsService.ComfortLimitKey,
+                Value = comfortSeed,
+                Description = "Maximum allowed daily Comfort break time in minutes (Developer adjustable)."
+            });
+            await db.SaveChangesAsync();
+        }
+
+        if (!await db.SystemSettings.AnyAsync(s => s.Key == Services.SettingsService.MealLimitKey))
+        {
+            db.SystemSettings.Add(new SystemSetting
+            {
+                Key = Services.SettingsService.MealLimitKey,
+                Value = BreakStatusCodes.DefaultMealLimitMinutes.ToString(),
+                Description = "Maximum allowed daily Meal break time in minutes (Developer adjustable)."
+            });
+            await db.SaveChangesAsync();
+        }
+
+        // Soft-update legacy description only (value untouched).
+        var legacySetting = await db.SystemSettings.FirstOrDefaultAsync(s => s.Key == Services.SettingsService.DailyLimitKey);
+        if (legacySetting is not null &&
+            (legacySetting.Description is null || !legacySetting.Description.Contains("Comfort", StringComparison.OrdinalIgnoreCase)))
+        {
+            legacySetting.Description = "Legacy alias of Comfort break daily limit (minutes). Kept in sync with ComfortBreakLimitMinutes.";
             await db.SaveChangesAsync();
         }
 

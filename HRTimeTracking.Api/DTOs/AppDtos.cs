@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using HRTimeTracking.Api.Models;
 
 namespace HRTimeTracking.Api.DTOs;
 
@@ -108,6 +109,7 @@ public record BreakSessionDto(
     string EmployeeCode,
     string EmployeeName,
     string DepartmentName,
+    string BreakType,
     DateTime OutTime,
     DateTime? InTime,
     int? DurationSeconds,
@@ -121,25 +123,43 @@ public record EmployeeBreakStatusDto(
     string FullName,
     int DepartmentId,
     string DepartmentName,
-    int TotalBreakSecondsToday,
-    string TotalBreakDisplay,
-    string Status,
-    string StatusColor,
+    int ComfortBreakSecondsToday,
+    string ComfortBreakDisplay,
+    string ComfortStatus,
+    string ComfortStatusColor,
+    int ComfortClosedCountToday,
+    int MealBreakSecondsToday,
+    string MealBreakDisplay,
+    string MealStatus,
+    string MealStatusColor,
+    int MealClosedCountToday,
     bool IsOnBreak,
+    string? CurrentBreakType,
     DateTime? CurrentOutTime,
-    int? CurrentBreakElapsedSeconds,
-    int ClosedBreakCountToday);
+    int? CurrentBreakElapsedSeconds)
+{
+    public bool IsOnComfortBreak => IsOnBreak && CurrentBreakType == BreakTypes.Comfort;
+    public bool IsOnMealBreak => IsOnBreak && CurrentBreakType == BreakTypes.Meal;
+}
 
-public record ToggleBreakRequest([Required] int EmployeeId);
+public record ToggleBreakRequest(
+    [Required] int EmployeeId,
+    [Required] string BreakType);
 
 public record LiveBoardDto(
     DateOnly Date,
-    int DailyLimitMinutes,
+    int ComfortLimitMinutes,
+    int MealLimitMinutes,
     IReadOnlyList<EmployeeBreakStatusDto> Employees,
     int OnBreakCount,
-    int ExceededCount,
-    int SatisfiedCount,
-    int WellSatisfiedCount);
+    int ComfortOnBreakCount,
+    int MealOnBreakCount,
+    int ComfortExceededCount,
+    int ComfortSatisfiedCount,
+    int ComfortWellSatisfiedCount,
+    int MealExceededCount,
+    int MealSatisfiedCount,
+    int MealWellSatisfiedCount);
 
 public record ReportRowDto(
     int EmployeeId,
@@ -148,20 +168,29 @@ public record ReportRowDto(
     string DepartmentName,
     string? ShiftName,
     DateOnly Date,
-    int TotalBreakSeconds,
-    string TotalBreakDisplay,
-    string Status,
-    string StatusColor,
-    int BreakCount);
+    int ComfortBreakSeconds,
+    string ComfortBreakDisplay,
+    string ComfortStatus,
+    string ComfortStatusColor,
+    int ComfortBreakCount,
+    int MealBreakSeconds,
+    string MealBreakDisplay,
+    string MealStatus,
+    string MealStatusColor,
+    int MealBreakCount);
 
 public record ReportSummaryDto(
     DateOnly From,
     DateOnly To,
-    int DailyLimitMinutes,
+    int ComfortLimitMinutes,
+    int MealLimitMinutes,
     int EmployeeDays,
-    int WellSatisfiedCount,
-    int SatisfiedCount,
-    int ExceededCount,
+    int ComfortWellSatisfiedCount,
+    int ComfortSatisfiedCount,
+    int ComfortExceededCount,
+    int MealWellSatisfiedCount,
+    int MealSatisfiedCount,
+    int MealExceededCount,
     int? ShiftId,
     string? ShiftName,
     string? ShiftDisplay,
@@ -171,10 +200,16 @@ public record DashboardDto(
     int ActiveEmployees,
     int ActiveDepartments,
     int OnBreakNow,
-    int ExceededToday,
-    int SatisfiedToday,
-    int WellSatisfiedToday,
-    int TotalBreaksToday);
+    int ComfortOnBreakNow,
+    int MealOnBreakNow,
+    int ComfortExceededToday,
+    int ComfortSatisfiedToday,
+    int ComfortWellSatisfiedToday,
+    int MealExceededToday,
+    int MealSatisfiedToday,
+    int MealWellSatisfiedToday,
+    int ComfortLimitMinutes,
+    int MealLimitMinutes);
 
 public record SystemSettingDto(int Id, string Key, string Value, string? Description);
 

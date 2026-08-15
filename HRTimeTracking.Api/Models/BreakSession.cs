@@ -10,6 +10,10 @@ public class BreakSession
 
     public Employee Employee { get; set; } = null!;
 
+    /// <summary>Comfort or Meal. Existing rows default to Comfort (additive migration).</summary>
+    [MaxLength(20)]
+    public string BreakType { get; set; } = BreakTypes.Comfort;
+
     public DateTime OutTime { get; set; }
 
     public DateTime? InTime { get; set; }

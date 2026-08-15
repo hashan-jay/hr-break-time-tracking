@@ -77,17 +77,25 @@ export default function ReportsPage() {
 
   const exportCsv = () => {
     if (!report?.rows?.length) return;
-    const header = ['Date', 'Code', 'Employee', 'Department', 'Shift', 'Total', 'Seconds', 'Status', 'Breaks'];
+    const header = [
+      'Date', 'Code', 'Employee', 'Department', 'Shift',
+      'ComfortTotal', 'ComfortSeconds', 'ComfortStatus', 'ComfortBreaks',
+      'MealTotal', 'MealSeconds', 'MealStatus', 'MealBreaks',
+    ];
     const lines = report.rows.map((r) => [
       r.date,
       r.employeeCode,
       `"${r.employeeName}"`,
       `"${r.departmentName}"`,
       `"${r.shiftName || ''}"`,
-      r.totalBreakDisplay,
-      r.totalBreakSeconds,
-      `"${r.status}"`,
-      r.breakCount,
+      r.comfortBreakDisplay,
+      r.comfortBreakSeconds,
+      `"${r.comfortStatus}"`,
+      r.comfortBreakCount,
+      r.mealBreakDisplay,
+      r.mealBreakSeconds,
+      `"${r.mealStatus}"`,
+      r.mealBreakCount,
     ].join(','));
     const blob = new Blob([[header.join(','), ...lines].join('\n')], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
@@ -176,15 +184,23 @@ export default function ReportsPage() {
 
       {report && (
         <>
+          <p className="hint no-print">
+            Limits — Meal: <strong>{report.mealLimitMinutes} min</strong> · Comfort:{' '}
+            <strong>{report.comfortLimitMinutes} min</strong>
+            {(report.shiftDisplay || report.shiftName) ? (
+              <> · Shift: <strong>{report.shiftDisplay || report.shiftName}</strong></>
+            ) : null}
+          </p>
+
           <div className="stats-grid compact no-print">
             <div className="stat-card"><div className="stat-value">{report.employeeDays}</div><div className="stat-label">Employee-days</div></div>
-            <div className="stat-card tone-green"><div className="stat-value">{report.wellSatisfiedCount}</div><div className="stat-label">Well Satisfied</div></div>
-            <div className="stat-card tone-blue"><div className="stat-value">{report.satisfiedCount}</div><div className="stat-label">Satisfied</div></div>
-            <div className="stat-card tone-red"><div className="stat-value">{report.exceededCount}</div><div className="stat-label">Exceeded</div></div>
+            <div className="stat-card tone-green"><div className="stat-value">{report.mealWellSatisfiedCount}</div><div className="stat-label">Meal Well Satisfied</div></div>
+            <div className="stat-card tone-blue"><div className="stat-value">{report.mealSatisfiedCount}</div><div className="stat-label">Meal Satisfied</div></div>
+            <div className="stat-card tone-red"><div className="stat-value">{report.mealExceededCount}</div><div className="stat-label">Meal Exceeded</div></div>
+            <div className="stat-card tone-green"><div className="stat-value">{report.comfortWellSatisfiedCount}</div><div className="stat-label">Comfort Well Satisfied</div></div>
+            <div className="stat-card tone-blue"><div className="stat-value">{report.comfortSatisfiedCount}</div><div className="stat-label">Comfort Satisfied</div></div>
+            <div className="stat-card tone-red"><div className="stat-value">{report.comfortExceededCount}</div><div className="stat-label">Comfort Exceeded</div></div>
           </div>
-          {(report.shiftDisplay || report.shiftName) && (
-            <p className="hint no-print">Shift filter: <strong>{report.shiftDisplay || report.shiftName}</strong></p>
-          )}
 
           <div className="table-wrap no-print">
             <table>
@@ -195,9 +211,10 @@ export default function ReportsPage() {
                   <th>Employee</th>
                   <th>Department</th>
                   <th>Shift</th>
-                  <th>Total</th>
-                  <th>Breaks</th>
-                  <th>Status</th>
+                  <th>Meal</th>
+                  <th>Meal status</th>
+                  <th>Comfort</th>
+                  <th>Comfort status</th>
                 </tr>
               </thead>
               <tbody>
@@ -208,13 +225,14 @@ export default function ReportsPage() {
                     <td>{r.employeeName}</td>
                     <td>{r.departmentName}</td>
                     <td>{r.shiftName || '—'}</td>
-                    <td>{r.totalBreakDisplay}</td>
-                    <td>{r.breakCount}</td>
-                    <td><StatusBadge status={r.status} color={r.statusColor} /></td>
+                    <td>{r.mealBreakDisplay} <span className="muted">({r.mealBreakCount})</span></td>
+                    <td><StatusBadge status={r.mealStatus} color={r.mealStatusColor} /></td>
+                    <td>{r.comfortBreakDisplay} <span className="muted">({r.comfortBreakCount})</span></td>
+                    <td><StatusBadge status={r.comfortStatus} color={r.comfortStatusColor} /></td>
                   </tr>
                 ))}
                 {!report.rows.length && (
-                  <tr><td colSpan={8} className="empty">No records for the selected filters.</td></tr>
+                  <tr><td colSpan={9} className="empty">No records for the selected filters.</td></tr>
                 )}
               </tbody>
             </table>

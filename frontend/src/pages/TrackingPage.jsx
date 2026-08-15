@@ -1,44 +1,156 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import api from '../api/client';
 import { LoadingBlock, MessageBar, StatusBadge } from '../components/UiBits';
+import {
+  BREAK_TYPES,
+  enrichEmployeesLive,
+  formatElapsed,
+  formatLocalClock,
+  typeFields,
+} from '../lib/breakHelpers';
 
-/** Format whole seconds as HH:MM:SS (always includes seconds). */
-function formatElapsed(seconds) {
-  if (seconds == null || Number.isNaN(seconds)) return '—';
-  const total = Math.max(0, Math.floor(seconds));
-  const h = Math.floor(total / 3600);
-  const m = Math.floor((total % 3600) / 60);
-  const s = total % 60;
-  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
-}
+function BreakTypeBoard({
+  title,
+  subtitle,
+  breakType,
+  limitMinutes,
+  employees,
+  selectedId,
+  onSelect,
+  onToggle,
+  onOut,
+  onIn,
+  busy,
+  emptyLabel,
+}) {
+  const selected = employees.find((e) => e.employeeId === selectedId) || null;
+  const selectedFields = selected ? typeFields(selected, breakType) : null;
+  const onThisBreak = selectedFields?.isOnThisBreak;
+  const blockedByOther = selected?.isOnBreak && !onThisBreak;
 
-/** Parse API local datetime (no Z) as PC local wall-clock. */
-function parseLocalDateTime(value) {
-  if (!value) return null;
-  if (value instanceof Date) return value;
-  const text = String(value).trim();
-  // "2026-08-12T15:04:05" or "2026-08-12T15:04:05.123" → treat as local
-  const normalized = text.includes('T') ? text : text.replace(' ', 'T');
-  const hasZone = /([zZ]|[+-]\d{2}:\d{2})$/.test(normalized);
-  const d = new Date(hasZone ? normalized : normalized);
-  return Number.isNaN(d.getTime()) ? null : d;
-}
+  return (
+    <section className="break-type-board">
+      <header className="break-type-board__header">
+        <div>
+          <h2>{title}</h2>
+          <p>{subtitle} Daily limit: <strong>{limitMinutes ?? '—'} minutes</strong>.</p>
+        </div>
+        <div className="break-type-board__chip">
+          On break{' '}
+          <strong>
+            {employees.filter((e) => typeFields(e, breakType).isOnThisBreak).length}
+          </strong>
+        </div>
+      </header>
 
-function formatLocalClock(value) {
-  const d = parseLocalDateTime(value);
-  if (!d) return '—';
-  return d.toLocaleTimeString(undefined, {
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hour12: false,
-  });
-}
+      <div className="tracking-layout">
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Code</th>
+                <th>Employee</th>
+                <th>Department</th>
+                <th>Today (HH:MM:SS)</th>
+                <th>Status</th>
+                <th>State</th>
+              </tr>
+            </thead>
+            <tbody>
+              {employees.map((e) => {
+                const fields = typeFields(e, breakType);
+                return (
+                  <tr
+                    key={`${breakType}-${e.employeeId}`}
+                    className={`${selectedId === e.employeeId ? 'selected' : ''} ${fields.isOnThisBreak ? 'on-break' : ''}`}
+                    onClick={() => onSelect(e.employeeId)}
+                  >
+                    <td>{e.employeeCode}</td>
+                    <td>{e.fullName}</td>
+                    <td>{e.departmentName}</td>
+                    <td>
+                      <strong>{fields.totalDisplay}</strong>
+                      <div className="muted">{fields.totalSeconds}s</div>
+                    </td>
+                    <td><StatusBadge status={fields.status} color={fields.statusColor} /></td>
+                    <td>
+                      {fields.isOnThisBreak
+                        ? `On ${breakType.toLowerCase()} break (${formatElapsed(e.currentBreakElapsedSeconds)}) · out ${formatLocalClock(e.currentOutTime)}`
+                        : e.isOnBreak
+                          ? `On ${e.currentBreakType} break`
+                          : 'In office'}
+                    </td>
+                  </tr>
+                );
+              })}
+              {!employees.length && (
+                <tr><td colSpan={6} className="empty">{emptyLabel}</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
 
-function liveElapsedSeconds(outTime, nowMs) {
-  const out = parseLocalDateTime(outTime);
-  if (!out) return 0;
-  return Math.max(0, Math.floor((nowMs - out.getTime()) / 1000));
+        <aside className="capture-panel">
+          <h2>Capture {title}</h2>
+          {selected && selectedFields ? (
+            <>
+              <div className="selected-employee">
+                <strong>{selected.fullName}</strong>
+                <span>{selected.employeeCode} · {selected.departmentName}</span>
+                <StatusBadge status={selectedFields.status} color={selectedFields.statusColor} />
+                <div className="selected-meta">
+                  <div>
+                    Today {breakType.toLowerCase()} total:{' '}
+                    <strong>{selectedFields.totalDisplay}</strong> ({selectedFields.totalSeconds}s)
+                  </div>
+                  <div>
+                    {onThisBreak
+                      ? `Out since ${formatLocalClock(selected.currentOutTime)} · open ${formatElapsed(selected.currentBreakElapsedSeconds)}`
+                      : blockedByOther
+                        ? `Currently on ${selected.currentBreakType} break — end that first`
+                        : 'Currently in office'}
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                className={`btn ${onThisBreak ? 'btn-in' : 'btn-out'} btn-xl`}
+                disabled={busy || blockedByOther}
+                onClick={() => onToggle(breakType)}
+              >
+                {onThisBreak
+                  ? `End ${breakType} break (Space / Enter)`
+                  : `Start ${breakType} break (Enter / Space)`}
+              </button>
+              <div className="capture-split">
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  disabled={busy || selected.isOnBreak}
+                  onClick={() => onOut(breakType)}
+                >
+                  Out only (O)
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  disabled={busy || !onThisBreak}
+                  onClick={() => onIn(breakType)}
+                >
+                  In only (I)
+                </button>
+              </div>
+              <p className="hint">
+                Meal and Comfort are tracked separately. Only one break can be open at a time.
+              </p>
+            </>
+          ) : (
+            <p className="hint">Select an employee from the list to capture {breakType.toLowerCase()} break time.</p>
+          )}
+        </aside>
+      </div>
+    </section>
+  );
 }
 
 export default function TrackingPage() {
@@ -49,6 +161,7 @@ export default function TrackingPage() {
   const [departmentId, setDepartmentId] = useState('');
   const [shiftId, setShiftId] = useState('');
   const [shiftId2, setShiftId2] = useState('');
+  const [activeType, setActiveType] = useState(BREAK_TYPES.MEAL);
   const [selectedId, setSelectedId] = useState(null);
   const [message, setMessage] = useState('');
   const [msgType, setMsgType] = useState('info');
@@ -70,15 +183,12 @@ export default function TrackingPage() {
   }, [search, departmentId, shiftId, shiftId2]);
 
   useEffect(() => {
-    Promise.all([
-      api.get('/departments'),
-      api.get('/shifts'),
-    ])
+    Promise.all([api.get('/departments'), api.get('/shifts')])
       .then(([deptRes, shiftRes]) => {
         setDepartments(deptRes.data || []);
         setShifts(shiftRes.data || []);
       })
-      .catch(() => { /* live board error handling covers UX */ });
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -102,41 +212,22 @@ export default function TrackingPage() {
     };
   }, [load]);
 
-  // Tick every second so open-break elapsed time is accurate to the second.
   useEffect(() => {
     const tick = setInterval(() => setNowMs(Date.now()), 1000);
     return () => clearInterval(tick);
   }, []);
 
-  const employeesView = useMemo(() => {
-    const list = board?.employees || [];
-    return list.map((e) => {
-      if (!e.isOnBreak || !e.currentOutTime) return e;
-      const openSeconds = liveElapsedSeconds(e.currentOutTime, nowMs);
-      const closedSeconds = Math.max(0, (e.totalBreakSecondsToday || 0) - (e.currentBreakElapsedSeconds || 0));
-      const totalSeconds = closedSeconds + openSeconds;
-      return {
-        ...e,
-        currentBreakElapsedSeconds: openSeconds,
-        totalBreakSecondsToday: totalSeconds,
-        totalBreakDisplay: formatElapsed(totalSeconds),
-      };
-    });
-  }, [board, nowMs]);
-
-  const selected = useMemo(
-    () => employeesView.find((e) => e.employeeId === selectedId) || null,
-    [employeesView, selectedId],
+  const employeesView = useMemo(
+    () => enrichEmployeesLive(board?.employees, nowMs),
+    [board, nowMs],
   );
 
   useEffect(() => {
     if (!selectedId) return;
-    if (!employeesView.some((e) => e.employeeId === selectedId)) {
-      setSelectedId(null);
-    }
+    if (!employeesView.some((e) => e.employeeId === selectedId)) setSelectedId(null);
   }, [employeesView, selectedId]);
 
-  const capture = async (mode) => {
+  const capture = async (mode, breakType) => {
     if (!selectedId) {
       setMsgType('error');
       setMessage('Select an employee first.');
@@ -145,12 +236,12 @@ export default function TrackingPage() {
     setBusy(true);
     try {
       const endpoint = mode === 'toggle' ? '/breaks/toggle' : mode === 'out' ? '/breaks/out' : '/breaks/in';
-      const { data } = await api.post(endpoint, { employeeId: selectedId });
+      const { data } = await api.post(endpoint, { employeeId: selectedId, breakType });
       setMsgType('success');
       setMessage(
         data.isOnBreak
-          ? `Out-time captured for ${data.fullName} at ${formatLocalClock(data.currentOutTime)}.`
-          : `In-time captured for ${data.fullName}. Total today: ${data.totalBreakDisplay} (${data.totalBreakSecondsToday}s).`,
+          ? `${breakType} out-time captured for ${data.fullName} at ${formatLocalClock(data.currentOutTime)}.`
+          : `${breakType} in-time captured for ${data.fullName}.`,
       );
       await load();
     } catch (err) {
@@ -165,18 +256,15 @@ export default function TrackingPage() {
     const onKey = (e) => {
       const tag = e.target?.tagName?.toLowerCase();
       if (tag === 'input' || tag === 'select' || tag === 'textarea') return;
-      if (e.key === 'Enter') {
+      if (e.key === 'Enter' || e.key === ' ') {
         e.preventDefault();
-        capture('toggle');
-      } else if (e.key === ' ') {
-        e.preventDefault();
-        capture('toggle');
+        capture('toggle', activeType);
       } else if (e.key.toLowerCase() === 'o') {
         e.preventDefault();
-        capture('out');
+        capture('out', activeType);
       } else if (e.key.toLowerCase() === 'i') {
         e.preventDefault();
-        capture('in');
+        capture('in', activeType);
       } else if (e.key === '/' && searchRef.current) {
         e.preventDefault();
         searchRef.current.focus();
@@ -185,7 +273,7 @@ export default function TrackingPage() {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedId, busy]);
+  }, [selectedId, busy, activeType]);
 
   if (!board && !message) return <LoadingBlock label="Loading live tracking…" />;
 
@@ -195,13 +283,14 @@ export default function TrackingPage() {
         <div>
           <h1>Live Tracking</h1>
           <p>
-            Search an employee, select them, then press <kbd>Enter</kbd> or <kbd>Space</kbd> to toggle out/in.
-            Times use this PC&apos;s local clock. Daily limit: {board?.dailyLimitMinutes ?? 20} minutes (second-accurate).
+            Capture Meal Break and Comfort Break separately. Select an employee in a section, then press{' '}
+            <kbd>Enter</kbd> / <kbd>Space</kbd> to toggle. Times use this PC&apos;s local clock.
           </p>
         </div>
         <div className="header-stats">
           <span>On break: {board?.onBreakCount ?? 0}</span>
-          <span className="text-red">Exceeded: {board?.exceededCount ?? 0}</span>
+          <span>Meal: {board?.mealOnBreakCount ?? 0}</span>
+          <span>Comfort: {board?.comfortOnBreakCount ?? 0}</span>
         </div>
       </header>
 
@@ -234,7 +323,6 @@ export default function TrackingPage() {
           onChange={(e) => setShiftId2(e.target.value)}
           disabled={!shiftId}
           aria-label="Overlapping shift"
-          title={!shiftId ? 'Select a primary shift first' : 'Include employees from an overlapping shift'}
         >
           <option value="">No overlap</option>
           {shifts.map((s) => {
@@ -254,86 +342,54 @@ export default function TrackingPage() {
         </select>
       </div>
 
-      <div className="tracking-layout">
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Code</th>
-                <th>Employee</th>
-                <th>Department</th>
-                <th>Today (HH:MM:SS)</th>
-                <th>Status</th>
-                <th>State</th>
-              </tr>
-            </thead>
-            <tbody>
-              {employeesView.map((e) => (
-                <tr
-                  key={e.employeeId}
-                  className={`${selectedId === e.employeeId ? 'selected' : ''} ${e.isOnBreak ? 'on-break' : ''}`}
-                  onClick={() => setSelectedId(e.employeeId)}
-                >
-                  <td>{e.employeeCode}</td>
-                  <td>{e.fullName}</td>
-                  <td>{e.departmentName}</td>
-                  <td>
-                    <strong>{e.totalBreakDisplay}</strong>
-                    <div className="muted">{e.totalBreakSecondsToday ?? 0}s</div>
-                  </td>
-                  <td><StatusBadge status={e.status} color={e.statusColor} /></td>
-                  <td>
-                    {e.isOnBreak
-                      ? `On break (${formatElapsed(e.currentBreakElapsedSeconds)}) · out ${formatLocalClock(e.currentOutTime)}`
-                      : 'In office'}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      <div className="break-type-stack">
+        <div
+          className={`break-type-focus ${activeType === BREAK_TYPES.MEAL ? 'is-active' : ''}`}
+          onFocusCapture={() => setActiveType(BREAK_TYPES.MEAL)}
+          onMouseDown={() => setActiveType(BREAK_TYPES.MEAL)}
+        >
+          <BreakTypeBoard
+            title="Meal Break"
+            subtitle="Lunch / meal time tracking."
+            breakType={BREAK_TYPES.MEAL}
+            limitMinutes={board?.mealLimitMinutes}
+            employees={employeesView}
+            selectedId={activeType === BREAK_TYPES.MEAL ? selectedId : null}
+            onSelect={(id) => {
+              setActiveType(BREAK_TYPES.MEAL);
+              setSelectedId(id);
+            }}
+            onToggle={(t) => capture('toggle', t)}
+            onOut={(t) => capture('out', t)}
+            onIn={(t) => capture('in', t)}
+            busy={busy}
+            emptyLabel="No employees found."
+          />
         </div>
 
-        <aside className="capture-panel">
-          <h2>Capture</h2>
-          {selected ? (
-            <>
-              <div className="selected-employee">
-                <strong>{selected.fullName}</strong>
-                <span>{selected.employeeCode} · {selected.departmentName}</span>
-                <StatusBadge status={selected.status} color={selected.statusColor} />
-                <div className="selected-meta">
-                  <div>Today total: <strong>{selected.totalBreakDisplay}</strong> ({selected.totalBreakSecondsToday}s)</div>
-                  <div>
-                    {selected.isOnBreak
-                      ? `Out since ${formatLocalClock(selected.currentOutTime)} · open ${formatElapsed(selected.currentBreakElapsedSeconds)}`
-                      : 'Currently in office'}
-                  </div>
-                </div>
-              </div>
-              <button
-                type="button"
-                className={`btn ${selected.isOnBreak ? 'btn-in' : 'btn-out'} btn-xl`}
-                disabled={busy}
-                onClick={() => capture('toggle')}
-              >
-                {selected.isOnBreak ? 'Capture In-Time (Space / Enter)' : 'Capture Out-Time (Enter / Space)'}
-              </button>
-              <div className="capture-split">
-                <button type="button" className="btn btn-ghost" disabled={busy || selected.isOnBreak} onClick={() => capture('out')}>
-                  Out only (O)
-                </button>
-                <button type="button" className="btn btn-ghost" disabled={busy || !selected.isOnBreak} onClick={() => capture('in')}>
-                  In only (I)
-                </button>
-              </div>
-              <p className="hint">
-                Each out/in pair is stored with local date-time to the second. Daily totals sum all sessions in seconds.
-              </p>
-            </>
-          ) : (
-            <p className="hint">Select an employee from the list to capture break time.</p>
-          )}
-        </aside>
+        <div
+          className={`break-type-focus ${activeType === BREAK_TYPES.COMFORT ? 'is-active' : ''}`}
+          onFocusCapture={() => setActiveType(BREAK_TYPES.COMFORT)}
+          onMouseDown={() => setActiveType(BREAK_TYPES.COMFORT)}
+        >
+          <BreakTypeBoard
+            title="Comfort Break"
+            subtitle="Short comfort break tracking."
+            breakType={BREAK_TYPES.COMFORT}
+            limitMinutes={board?.comfortLimitMinutes}
+            employees={employeesView}
+            selectedId={activeType === BREAK_TYPES.COMFORT ? selectedId : null}
+            onSelect={(id) => {
+              setActiveType(BREAK_TYPES.COMFORT);
+              setSelectedId(id);
+            }}
+            onToggle={(t) => capture('toggle', t)}
+            onOut={(t) => capture('out', t)}
+            onIn={(t) => capture('in', t)}
+            busy={busy}
+            emptyLabel="No employees found."
+          />
+        </div>
       </div>
     </div>
   );

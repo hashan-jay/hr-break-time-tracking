@@ -2,6 +2,7 @@ import { Navigate, Outlet, Route, Routes } from 'react-router-dom';
 import { AuthProvider, useAuth } from './auth/AuthContext';
 import AppLayout from './components/AppLayout';
 import PortalPage from './pages/PortalPage';
+import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
 import TrackingPage from './pages/TrackingPage';
 import EmployeesPage from './pages/EmployeesPage';
@@ -17,7 +18,7 @@ import './App.css';
 function ProtectedRoute({ allow }) {
   const { isAuthenticated, loading, roles } = useAuth();
   if (loading) return <LoadingBlock label="Checking session…" />;
-  if (!isAuthenticated) return <Navigate to="/" replace />;
+  if (!isAuthenticated) return <Navigate to="/login" replace />;
   if (allow && !allow.some((role) => roles.includes(role))) {
     return <Navigate to="/app" replace />;
   }
@@ -49,7 +50,7 @@ function AppRoutes() {
         </Route>
       </Route>
 
-      <Route path="/login" element={<Navigate to="/" replace />} />
+      <Route path="/login" element={<LoginPage />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

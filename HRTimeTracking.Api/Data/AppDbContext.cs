@@ -59,6 +59,8 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
         {
             entity.HasIndex(x => new { x.EmployeeId, x.BreakDate });
             entity.HasIndex(x => new { x.EmployeeId, x.InTime });
+            entity.HasIndex(x => new { x.EmployeeId, x.BreakType, x.BreakDate });
+            entity.Property(x => x.BreakType).HasMaxLength(20).IsRequired();
             entity.Property(x => x.RecordedByUserId).HasMaxLength(450);
             entity.Property(x => x.ClosedByUserId).HasMaxLength(450);
 

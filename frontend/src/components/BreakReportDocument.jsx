@@ -8,7 +8,7 @@ function statusClass(color) {
 }
 
 /**
- * A4 printable break-time report document (RoarFitnessERP monthly-report pattern).
+ * A4 printable break-time report document (Meal + Comfort).
  */
 export default function BreakReportDocument({ report, filters }) {
   if (!report) return null;
@@ -22,7 +22,7 @@ export default function BreakReportDocument({ report, filters }) {
     <div className="break-report-document">
       <header className="break-report-document__header print-header">
         <h1>HR Break Time Tracking</h1>
-        <h2>Employee Daily Break Compliance Report</h2>
+        <h2>Employee Daily Meal & Comfort Break Report</h2>
         <p>Generated {generatedAt} (PC local time)</p>
       </header>
 
@@ -48,8 +48,12 @@ export default function BreakReportDocument({ report, filters }) {
           <strong>{empLabel}</strong>
         </div>
         <div>
-          <span>Daily limit</span>
-          <strong>{report.dailyLimitMinutes} minutes</strong>
+          <span>Meal limit</span>
+          <strong>{report.mealLimitMinutes} minutes</strong>
+        </div>
+        <div>
+          <span>Comfort limit</span>
+          <strong>{report.comfortLimitMinutes} minutes</strong>
         </div>
         <div>
           <span>Employee-days</span>
@@ -59,20 +63,20 @@ export default function BreakReportDocument({ report, filters }) {
 
       <section className="break-report-document__kpis print-section">
         <div className="kpi">
-          <strong>{report.wellSatisfiedCount}</strong>
-          <span>Well Satisfied (&lt; limit)</span>
+          <strong>{report.mealWellSatisfiedCount}</strong>
+          <span>Meal Well Satisfied</span>
         </div>
         <div className="kpi">
-          <strong>{report.satisfiedCount}</strong>
-          <span>Satisfied (= limit)</span>
+          <strong>{report.mealExceededCount}</strong>
+          <span>Meal Exceeded</span>
         </div>
         <div className="kpi">
-          <strong>{report.exceededCount}</strong>
-          <span>Exceeded (&gt; limit)</span>
+          <strong>{report.comfortWellSatisfiedCount}</strong>
+          <span>Comfort Well Satisfied</span>
         </div>
         <div className="kpi">
-          <strong>{report.rows?.length || 0}</strong>
-          <span>Rows in report</span>
+          <strong>{report.comfortExceededCount}</strong>
+          <span>Comfort Exceeded</span>
         </div>
       </section>
 
@@ -86,10 +90,10 @@ export default function BreakReportDocument({ report, filters }) {
               <th>Employee</th>
               <th>Department</th>
               <th>Shift</th>
-              <th>Total (HH:MM:SS)</th>
-              <th>Seconds</th>
-              <th>Breaks</th>
-              <th>Status</th>
+              <th>Meal</th>
+              <th>Meal status</th>
+              <th>Comfort</th>
+              <th>Comfort status</th>
             </tr>
           </thead>
           <tbody>
@@ -100,10 +104,10 @@ export default function BreakReportDocument({ report, filters }) {
                 <td>{r.employeeName}</td>
                 <td>{r.departmentName}</td>
                 <td>{r.shiftName || '—'}</td>
-                <td>{r.totalBreakDisplay}</td>
-                <td>{r.totalBreakSeconds}</td>
-                <td>{r.breakCount}</td>
-                <td className={statusClass(r.statusColor)}>{r.status}</td>
+                <td>{r.mealBreakDisplay}</td>
+                <td className={statusClass(r.mealStatusColor)}>{r.mealStatus}</td>
+                <td>{r.comfortBreakDisplay}</td>
+                <td className={statusClass(r.comfortStatusColor)}>{r.comfortStatus}</td>
               </tr>
             ))}
             {!report.rows?.length && (
@@ -116,7 +120,8 @@ export default function BreakReportDocument({ report, filters }) {
       </section>
 
       <footer className="break-report-document__footer">
-        Status rules: Well Satisfied (&lt; {report.dailyLimitMinutes} min) · Satisfied (= {report.dailyLimitMinutes} min) · Exceeded (&gt; {report.dailyLimitMinutes} min).
+        Meal limit: {report.mealLimitMinutes} min · Comfort limit: {report.comfortLimitMinutes} min.
+        Status rules: Well Satisfied (&lt; limit) · Satisfied (= limit) · Exceeded (&gt; limit).
         Totals are calculated second-accurately from out-time / in-time records.
       </footer>
     </div>
@@ -129,32 +134,22 @@ export function renderBreakReportHtml(report, filters) {
   const empLabel = filters?.employeeName || 'All employees';
   const shiftLabel = filters?.shiftName || report.shiftDisplay || report.shiftName || 'All shifts';
   const rows = (report.rows || [])
-    .map((r) => {
-      const cls =
-        r.statusColor === 'green'
-          ? 'status-green'
-          : r.statusColor === 'blue'
-            ? 'status-blue'
-            : r.statusColor === 'red'
-              ? 'status-red'
-              : '';
-      return `<tr>
+    .map((r) => `<tr>
         <td>${r.date}</td>
         <td>${r.employeeCode}</td>
         <td>${escapeHtml(r.employeeName)}</td>
         <td>${escapeHtml(r.departmentName)}</td>
         <td>${escapeHtml(r.shiftName || '—')}</td>
-        <td>${r.totalBreakDisplay}</td>
-        <td>${r.totalBreakSeconds}</td>
-        <td>${r.breakCount}</td>
-        <td class="${cls}">${escapeHtml(r.status)}</td>
-      </tr>`;
-    })
+        <td>${r.mealBreakDisplay}</td>
+        <td class="${statusClass(r.mealStatusColor)}">${escapeHtml(r.mealStatus)}</td>
+        <td>${r.comfortBreakDisplay}</td>
+        <td class="${statusClass(r.comfortStatusColor)}">${escapeHtml(r.comfortStatus)}</td>
+      </tr>`)
     .join('');
 
   return `
     <h1>HR Break Time Tracking</h1>
-    <h2>Employee Daily Break Compliance Report</h2>
+    <h2>Employee Daily Meal & Comfort Break Report</h2>
     <p>Generated ${escapeHtml(generatedAt)} (PC local time)</p>
     <div class="meta">
       <div><span>Period from</span><strong>${report.from}</strong></div>
@@ -162,20 +157,21 @@ export function renderBreakReportHtml(report, filters) {
       <div><span>Shift</span><strong>${escapeHtml(shiftLabel)}</strong></div>
       <div><span>Department</span><strong>${escapeHtml(deptLabel)}</strong></div>
       <div><span>Employee</span><strong>${escapeHtml(empLabel)}</strong></div>
-      <div><span>Daily limit</span><strong>${report.dailyLimitMinutes} minutes</strong></div>
+      <div><span>Meal limit</span><strong>${report.mealLimitMinutes} minutes</strong></div>
+      <div><span>Comfort limit</span><strong>${report.comfortLimitMinutes} minutes</strong></div>
       <div><span>Employee-days</span><strong>${report.employeeDays}</strong></div>
     </div>
     <div class="kpis">
-      <div class="kpi"><strong>${report.wellSatisfiedCount}</strong><span>Well Satisfied</span></div>
-      <div class="kpi"><strong>${report.satisfiedCount}</strong><span>Satisfied</span></div>
-      <div class="kpi"><strong>${report.exceededCount}</strong><span>Exceeded</span></div>
-      <div class="kpi"><strong>${report.rows?.length || 0}</strong><span>Rows</span></div>
+      <div class="kpi"><strong>${report.mealWellSatisfiedCount}</strong><span>Meal Well Satisfied</span></div>
+      <div class="kpi"><strong>${report.mealExceededCount}</strong><span>Meal Exceeded</span></div>
+      <div class="kpi"><strong>${report.comfortWellSatisfiedCount}</strong><span>Comfort Well Satisfied</span></div>
+      <div class="kpi"><strong>${report.comfortExceededCount}</strong><span>Comfort Exceeded</span></div>
     </div>
     <table>
       <thead>
         <tr>
           <th>Date</th><th>Code</th><th>Employee</th><th>Department</th><th>Shift</th>
-          <th>Total</th><th>Seconds</th><th>Breaks</th><th>Status</th>
+          <th>Meal</th><th>Meal status</th><th>Comfort</th><th>Comfort status</th>
         </tr>
       </thead>
       <tbody>
@@ -183,7 +179,7 @@ export function renderBreakReportHtml(report, filters) {
       </tbody>
     </table>
     <div class="footer">
-      Status rules use the configured daily limit (${report.dailyLimitMinutes} minutes).
+      Meal limit: ${report.mealLimitMinutes} min · Comfort limit: ${report.comfortLimitMinutes} min.
       Totals are calculated second-accurately from out-time / in-time records.
     </div>
   `;

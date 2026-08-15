@@ -140,11 +140,16 @@ public interface ISettingsService
     Task<IReadOnlyList<SystemSettingDto>> GetAllAsync();
     Task<(bool Ok, string? Error, SystemSettingDto? Data)> UpdateAsync(string key, string value, string? userId);
     Task<int> GetDailyLimitMinutesAsync();
+    Task<int> GetComfortLimitMinutesAsync();
+    Task<int> GetMealLimitMinutesAsync();
 }
 
 public class SettingsService : ISettingsService
 {
+    /// <summary>Legacy key; kept in sync with ComfortBreakLimitMinutes for compatibility.</summary>
     public const string DailyLimitKey = "DailyBreakLimitMinutes";
+    public const string ComfortLimitKey = "ComfortBreakLimitMinutes";
+    public const string MealLimitKey = "MealBreakLimitMinutes";
 
     private readonly AppDbContext _db;
     private readonly IAuditService _audit;
@@ -168,23 +173,47 @@ public class SettingsService : ISettingsService
         var setting = await _db.SystemSettings.FirstOrDefaultAsync(s => s.Key == key);
         if (setting is null) return (false, "Setting not found.", null);
 
-        if (key == DailyLimitKey && (!int.TryParse(value, out var minutes) || minutes < 1 || minutes > 240))
-            return (false, "Daily break limit must be between 1 and 240 minutes.", null);
+        var isLimitKey = key is DailyLimitKey or ComfortLimitKey or MealLimitKey;
+        if (isLimitKey && (!int.TryParse(value, out var minutes) || minutes < 1 || minutes > 240))
+            return (false, "Break limit must be between 1 and 240 minutes.", null);
 
-        setting.Value = value.Trim();
+        var trimmed = value.Trim();
+        setting.Value = trimmed;
+
+        // Keep legacy daily key and comfort key aligned when either changes.
+        if (key is DailyLimitKey or ComfortLimitKey)
+        {
+            var otherKey = key == DailyLimitKey ? ComfortLimitKey : DailyLimitKey;
+            var other = await _db.SystemSettings.FirstOrDefaultAsync(s => s.Key == otherKey);
+            if (other is not null) other.Value = trimmed;
+        }
+
         await _db.SaveChangesAsync();
         await _audit.LogAsync(userId, "Update", "SystemSetting", setting.Id.ToString(), $"Updated setting '{key}' to '{value}'.");
 
         return (true, null, new SystemSettingDto(setting.Id, setting.Key, setting.Value, setting.Description));
     }
 
-    public async Task<int> GetDailyLimitMinutesAsync()
+    public Task<int> GetDailyLimitMinutesAsync() => GetComfortLimitMinutesAsync();
+
+    public async Task<int> GetComfortLimitMinutesAsync()
     {
         var value = await _db.SystemSettings.AsNoTracking()
-            .Where(s => s.Key == DailyLimitKey)
+            .Where(s => s.Key == ComfortLimitKey || s.Key == DailyLimitKey)
+            .OrderBy(s => s.Key == ComfortLimitKey ? 0 : 1)
             .Select(s => s.Value)
             .FirstOrDefaultAsync();
 
-        return int.TryParse(value, out var minutes) ? minutes : BreakStatusCodes.DefaultDailyLimitMinutes;
+        return int.TryParse(value, out var minutes) ? minutes : BreakStatusCodes.DefaultComfortLimitMinutes;
+    }
+
+    public async Task<int> GetMealLimitMinutesAsync()
+    {
+        var value = await _db.SystemSettings.AsNoTracking()
+            .Where(s => s.Key == MealLimitKey)
+            .Select(s => s.Value)
+            .FirstOrDefaultAsync();
+
+        return int.TryParse(value, out var minutes) ? minutes : BreakStatusCodes.DefaultMealLimitMinutes;
     }
 }

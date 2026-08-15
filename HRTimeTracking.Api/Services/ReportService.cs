@@ -26,24 +26,29 @@ public class ReportService : IReportService
 
     public async Task<DashboardDto> GetDashboardAsync()
     {
-        var today = TimeDisplay.TodayLocal();
         var board = await _breakTracking.GetLiveBoardAsync();
-        var totalBreaksToday = await _db.BreakSessions.CountAsync(b => b.BreakDate == today);
 
         return new DashboardDto(
             await _db.Employees.CountAsync(e => !e.IsDeleted),
             await _db.Departments.CountAsync(d => !d.IsDeleted),
             board.OnBreakCount,
-            board.ExceededCount,
-            board.SatisfiedCount,
-            board.WellSatisfiedCount,
-            totalBreaksToday);
+            board.ComfortOnBreakCount,
+            board.MealOnBreakCount,
+            board.ComfortExceededCount,
+            board.ComfortSatisfiedCount,
+            board.ComfortWellSatisfiedCount,
+            board.MealExceededCount,
+            board.MealSatisfiedCount,
+            board.MealWellSatisfiedCount,
+            board.ComfortLimitMinutes,
+            board.MealLimitMinutes);
     }
 
     public async Task<ReportSummaryDto> GetReportAsync(DateOnly from, DateOnly to, int? departmentId, int? employeeId, int? shiftId)
     {
         if (to < from) (from, to) = (to, from);
-        var limitMinutes = await _settings.GetDailyLimitMinutesAsync();
+        var comfortLimit = await _settings.GetComfortLimitMinutesAsync();
+        var mealLimit = await _settings.GetMealLimitMinutesAsync();
 
         string? shiftName = null;
         string? shiftDisplay = null;
@@ -74,6 +79,8 @@ public class ReportService : IReportService
         {
             session.OutTime = TimeDisplay.AsLocal(session.OutTime);
             session.InTime = TimeDisplay.AsLocal(session.InTime);
+            if (string.IsNullOrWhiteSpace(session.BreakType))
+                session.BreakType = BreakTypes.Comfort;
         }
 
         var now = TimeDisplay.NowLocal();
@@ -93,8 +100,17 @@ public class ReportService : IReportService
                 var dayEnd = g.Key.BreakDate == TimeDisplay.TodayLocal()
                     ? now
                     : g.Key.BreakDate.ToDateTime(new TimeOnly(23, 59, 59), DateTimeKind.Local);
-                var total = TimeDisplay.ComputeDailyTotalSeconds(g, dayEnd);
-                var (status, color) = BreakStatusCodes.FromTotalSeconds(total, limitMinutes);
+
+                var comfortSessions = g.Where(s =>
+                    BreakTypes.Comfort.Equals(string.IsNullOrWhiteSpace(s.BreakType) ? BreakTypes.Comfort : s.BreakType, StringComparison.OrdinalIgnoreCase)).ToList();
+                var mealSessions = g.Where(s =>
+                    BreakTypes.Meal.Equals(s.BreakType, StringComparison.OrdinalIgnoreCase)).ToList();
+
+                var comfortTotal = TimeDisplay.ComputeDailyTotalSeconds(comfortSessions, dayEnd);
+                var mealTotal = TimeDisplay.ComputeDailyTotalSeconds(mealSessions, dayEnd);
+                var (comfortStatus, comfortColor) = BreakStatusCodes.FromTotalSeconds(comfortTotal, comfortLimit);
+                var (mealStatus, mealColor) = BreakStatusCodes.FromTotalSeconds(mealTotal, mealLimit);
+
                 return new ReportRowDto(
                     g.Key.EmployeeId,
                     g.Key.EmployeeCode,
@@ -102,11 +118,16 @@ public class ReportService : IReportService
                     g.Key.Dept,
                     g.Key.ShiftName,
                     g.Key.BreakDate,
-                    total,
-                    TimeDisplay.FormatSeconds(total),
-                    status,
-                    color,
-                    g.Count());
+                    comfortTotal,
+                    TimeDisplay.FormatSeconds(comfortTotal),
+                    comfortStatus,
+                    comfortColor,
+                    comfortSessions.Count,
+                    mealTotal,
+                    TimeDisplay.FormatSeconds(mealTotal),
+                    mealStatus,
+                    mealColor,
+                    mealSessions.Count);
             })
             .OrderBy(r => r.Date)
             .ThenBy(r => r.EmployeeName)
@@ -115,11 +136,15 @@ public class ReportService : IReportService
         return new ReportSummaryDto(
             from,
             to,
-            limitMinutes,
+            comfortLimit,
+            mealLimit,
             groups.Count,
-            groups.Count(r => r.Status == BreakStatusCodes.WellSatisfied),
-            groups.Count(r => r.Status == BreakStatusCodes.Satisfied),
-            groups.Count(r => r.Status == BreakStatusCodes.Exceeded),
+            groups.Count(r => r.ComfortStatus == BreakStatusCodes.WellSatisfied),
+            groups.Count(r => r.ComfortStatus == BreakStatusCodes.Satisfied),
+            groups.Count(r => r.ComfortStatus == BreakStatusCodes.Exceeded),
+            groups.Count(r => r.MealStatus == BreakStatusCodes.WellSatisfied),
+            groups.Count(r => r.MealStatus == BreakStatusCodes.Satisfied),
+            groups.Count(r => r.MealStatus == BreakStatusCodes.Exceeded),
             shiftId,
             shiftName,
             shiftDisplay,

@@ -9,10 +9,10 @@ public interface IBreakTrackingService
 {
     Task<LiveBoardDto> GetLiveBoardAsync(string? search = null, int? departmentId = null, int? shiftId = null, int? shiftId2 = null);
     Task<EmployeeBreakStatusDto?> GetEmployeeStatusAsync(int employeeId);
-    Task<(bool Ok, string? Error, EmployeeBreakStatusDto? Data)> ToggleAsync(int employeeId, string? userId);
-    Task<(bool Ok, string? Error, EmployeeBreakStatusDto? Data)> RecordOutAsync(int employeeId, string? userId);
-    Task<(bool Ok, string? Error, EmployeeBreakStatusDto? Data)> RecordInAsync(int employeeId, string? userId);
-    Task<IReadOnlyList<BreakSessionDto>> GetSessionsAsync(DateOnly? from, DateOnly? to, int? employeeId, int? departmentId);
+    Task<(bool Ok, string? Error, EmployeeBreakStatusDto? Data)> ToggleAsync(int employeeId, string breakType, string? userId);
+    Task<(bool Ok, string? Error, EmployeeBreakStatusDto? Data)> RecordOutAsync(int employeeId, string breakType, string? userId);
+    Task<(bool Ok, string? Error, EmployeeBreakStatusDto? Data)> RecordInAsync(int employeeId, string? breakType, string? userId);
+    Task<IReadOnlyList<BreakSessionDto>> GetSessionsAsync(DateOnly? from, DateOnly? to, int? employeeId, int? departmentId, string? breakType = null);
 }
 
 public class BreakTrackingService : IBreakTrackingService
@@ -32,7 +32,8 @@ public class BreakTrackingService : IBreakTrackingService
     {
         var today = TimeDisplay.TodayLocal();
         var now = TimeDisplay.NowLocal();
-        var limitMinutes = await _settings.GetDailyLimitMinutesAsync();
+        var comfortLimit = await _settings.GetComfortLimitMinutesAsync();
+        var mealLimit = await _settings.GetMealLimitMinutesAsync();
 
         var employeesQuery = _db.Employees.AsNoTracking()
             .Include(e => e.Department)
@@ -41,7 +42,6 @@ public class BreakTrackingService : IBreakTrackingService
         if (departmentId.HasValue)
             employeesQuery = employeesQuery.Where(e => e.DepartmentId == departmentId.Value);
 
-        // One or two shift filters: show employees assigned to either selected shift (overlap view).
         var shiftIds = new List<int>();
         if (shiftId.HasValue) shiftIds.Add(shiftId.Value);
         if (shiftId2.HasValue && !shiftIds.Contains(shiftId2.Value)) shiftIds.Add(shiftId2.Value);
@@ -66,24 +66,31 @@ public class BreakTrackingService : IBreakTrackingService
             .Where(b => employeeIds.Contains(b.EmployeeId) && b.BreakDate == today)
             .ToListAsync();
 
-        // Normalize Kind after SQL read so elapsed math is always local.
         foreach (var session in sessions)
         {
             session.OutTime = TimeDisplay.AsLocal(session.OutTime);
             session.InTime = TimeDisplay.AsLocal(session.InTime);
+            if (string.IsNullOrWhiteSpace(session.BreakType))
+                session.BreakType = BreakTypes.Comfort;
         }
 
         var statuses = employees.Select(e =>
-            BuildStatus(e, sessions.Where(s => s.EmployeeId == e.Id).ToList(), now, limitMinutes)).ToList();
+            BuildStatus(e, sessions.Where(s => s.EmployeeId == e.Id).ToList(), now, comfortLimit, mealLimit)).ToList();
 
         return new LiveBoardDto(
             today,
-            limitMinutes,
+            comfortLimit,
+            mealLimit,
             statuses,
             statuses.Count(s => s.IsOnBreak),
-            statuses.Count(s => s.Status == BreakStatusCodes.Exceeded),
-            statuses.Count(s => s.Status == BreakStatusCodes.Satisfied),
-            statuses.Count(s => s.Status == BreakStatusCodes.WellSatisfied));
+            statuses.Count(s => s.IsOnComfortBreak),
+            statuses.Count(s => s.IsOnMealBreak),
+            statuses.Count(s => s.ComfortStatus == BreakStatusCodes.Exceeded),
+            statuses.Count(s => s.ComfortStatus == BreakStatusCodes.Satisfied),
+            statuses.Count(s => s.ComfortStatus == BreakStatusCodes.WellSatisfied),
+            statuses.Count(s => s.MealStatus == BreakStatusCodes.Exceeded),
+            statuses.Count(s => s.MealStatus == BreakStatusCodes.Satisfied),
+            statuses.Count(s => s.MealStatus == BreakStatusCodes.WellSatisfied));
     }
 
     public async Task<EmployeeBreakStatusDto?> GetEmployeeStatusAsync(int employeeId)
@@ -94,7 +101,8 @@ public class BreakTrackingService : IBreakTrackingService
         if (employee is null) return null;
 
         var today = TimeDisplay.TodayLocal();
-        var limitMinutes = await _settings.GetDailyLimitMinutesAsync();
+        var comfortLimit = await _settings.GetComfortLimitMinutesAsync();
+        var mealLimit = await _settings.GetMealLimitMinutesAsync();
         var sessions = await _db.BreakSessions.AsNoTracking()
             .Where(b => b.EmployeeId == employeeId && b.BreakDate == today)
             .ToListAsync();
@@ -103,32 +111,52 @@ public class BreakTrackingService : IBreakTrackingService
         {
             session.OutTime = TimeDisplay.AsLocal(session.OutTime);
             session.InTime = TimeDisplay.AsLocal(session.InTime);
+            if (string.IsNullOrWhiteSpace(session.BreakType))
+                session.BreakType = BreakTypes.Comfort;
         }
 
-        return BuildStatus(employee, sessions, TimeDisplay.NowLocal(), limitMinutes);
+        return BuildStatus(employee, sessions, TimeDisplay.NowLocal(), comfortLimit, mealLimit);
     }
 
-    public async Task<(bool Ok, string? Error, EmployeeBreakStatusDto? Data)> ToggleAsync(int employeeId, string? userId)
+    public async Task<(bool Ok, string? Error, EmployeeBreakStatusDto? Data)> ToggleAsync(int employeeId, string breakType, string? userId)
     {
+        if (!BreakTypes.IsValid(breakType))
+            return (false, "Break type must be Comfort or Meal.", null);
+
+        var type = BreakTypes.Normalize(breakType);
         var open = await _db.BreakSessions.FirstOrDefaultAsync(b => b.EmployeeId == employeeId && b.InTime == null);
-        return open is null
-            ? await RecordOutAsync(employeeId, userId)
-            : await RecordInAsync(employeeId, userId);
+        if (open is null)
+            return await RecordOutAsync(employeeId, type, userId);
+
+        var openType = string.IsNullOrWhiteSpace(open.BreakType) ? BreakTypes.Comfort : BreakTypes.Normalize(open.BreakType);
+        if (!openType.Equals(type, StringComparison.OrdinalIgnoreCase))
+            return (false, $"Employee is already on a {openType} break. End that break first.", null);
+
+        return await RecordInAsync(employeeId, type, userId);
     }
 
-    public async Task<(bool Ok, string? Error, EmployeeBreakStatusDto? Data)> RecordOutAsync(int employeeId, string? userId)
+    public async Task<(bool Ok, string? Error, EmployeeBreakStatusDto? Data)> RecordOutAsync(int employeeId, string breakType, string? userId)
     {
+        if (!BreakTypes.IsValid(breakType))
+            return (false, "Break type must be Comfort or Meal.", null);
+        var type = BreakTypes.Normalize(breakType);
+
         var employee = await _db.Employees.Include(e => e.Department)
             .FirstOrDefaultAsync(e => e.Id == employeeId && !e.IsDeleted);
         if (employee is null) return (false, "Employee not found.", null);
 
-        var openExists = await _db.BreakSessions.AnyAsync(b => b.EmployeeId == employeeId && b.InTime == null);
-        if (openExists) return (false, "Employee is already on break. Capture in-time first.", null);
+        var open = await _db.BreakSessions.FirstOrDefaultAsync(b => b.EmployeeId == employeeId && b.InTime == null);
+        if (open is not null)
+        {
+            var openType = string.IsNullOrWhiteSpace(open.BreakType) ? BreakTypes.Comfort : open.BreakType;
+            return (false, $"Employee is already on a {openType} break. Capture in-time first.", null);
+        }
 
         var now = TimeDisplay.NowLocal();
         var session = new BreakSession
         {
             EmployeeId = employeeId,
+            BreakType = type,
             OutTime = now,
             BreakDate = DateOnly.FromDateTime(now),
             RecordedByUserId = userId,
@@ -137,12 +165,12 @@ public class BreakTrackingService : IBreakTrackingService
         _db.BreakSessions.Add(session);
         await _db.SaveChangesAsync();
         await _audit.LogAsync(userId, "BreakOut", "BreakSession", session.Id.ToString(),
-            $"Out-time recorded for {employee.FullName} ({employee.EmployeeCode}) at {TimeDisplay.FormatLocalClock(now)} (local).");
+            $"{type} out-time recorded for {employee.FullName} ({employee.EmployeeCode}) at {TimeDisplay.FormatLocalClock(now)} (local).");
 
         return (true, null, await GetEmployeeStatusAsync(employeeId));
     }
 
-    public async Task<(bool Ok, string? Error, EmployeeBreakStatusDto? Data)> RecordInAsync(int employeeId, string? userId)
+    public async Task<(bool Ok, string? Error, EmployeeBreakStatusDto? Data)> RecordInAsync(int employeeId, string? breakType, string? userId)
     {
         var employee = await _db.Employees.Include(e => e.Department)
             .FirstOrDefaultAsync(e => e.Id == employeeId);
@@ -155,6 +183,16 @@ public class BreakTrackingService : IBreakTrackingService
 
         if (open is null) return (false, "Employee is not on break. Capture out-time first.", null);
 
+        var openType = string.IsNullOrWhiteSpace(open.BreakType) ? BreakTypes.Comfort : BreakTypes.Normalize(open.BreakType);
+        if (!string.IsNullOrWhiteSpace(breakType))
+        {
+            if (!BreakTypes.IsValid(breakType))
+                return (false, "Break type must be Comfort or Meal.", null);
+            var requested = BreakTypes.Normalize(breakType);
+            if (!openType.Equals(requested, StringComparison.OrdinalIgnoreCase))
+                return (false, $"Open break is {openType}, not {requested}.", null);
+        }
+
         open.OutTime = TimeDisplay.AsLocal(open.OutTime);
         var now = TimeDisplay.NowLocal();
         if (now < open.OutTime)
@@ -164,14 +202,16 @@ public class BreakTrackingService : IBreakTrackingService
         open.InTime = now;
         open.DurationSeconds = durationSeconds;
         open.ClosedByUserId = userId;
+        if (string.IsNullOrWhiteSpace(open.BreakType))
+            open.BreakType = BreakTypes.Comfort;
         await _db.SaveChangesAsync();
         await _audit.LogAsync(userId, "BreakIn", "BreakSession", open.Id.ToString(),
-            $"In-time recorded for {employee.FullName} ({employee.EmployeeCode}) at {TimeDisplay.FormatLocalClock(now)} (local). Duration {TimeDisplay.FormatSeconds(durationSeconds)} ({durationSeconds} seconds).");
+            $"{openType} in-time recorded for {employee.FullName} ({employee.EmployeeCode}) at {TimeDisplay.FormatLocalClock(now)} (local). Duration {TimeDisplay.FormatSeconds(durationSeconds)} ({durationSeconds} seconds).");
 
         return (true, null, await GetEmployeeStatusAsync(employeeId));
     }
 
-    public async Task<IReadOnlyList<BreakSessionDto>> GetSessionsAsync(DateOnly? from, DateOnly? to, int? employeeId, int? departmentId)
+    public async Task<IReadOnlyList<BreakSessionDto>> GetSessionsAsync(DateOnly? from, DateOnly? to, int? employeeId, int? departmentId, string? breakType = null)
     {
         var fromDate = from ?? TimeDisplay.TodayLocal();
         var toDate = to ?? fromDate;
@@ -182,6 +222,11 @@ public class BreakTrackingService : IBreakTrackingService
 
         if (employeeId.HasValue) query = query.Where(b => b.EmployeeId == employeeId.Value);
         if (departmentId.HasValue) query = query.Where(b => b.Employee.DepartmentId == departmentId.Value);
+        if (!string.IsNullOrWhiteSpace(breakType) && BreakTypes.IsValid(breakType))
+        {
+            var type = BreakTypes.Normalize(breakType);
+            query = query.Where(b => b.BreakType == type);
+        }
 
         var list = await query.OrderByDescending(b => b.OutTime).ToListAsync();
         return list.Select(MapSession).ToList();
@@ -194,6 +239,7 @@ public class BreakTrackingService : IBreakTrackingService
         var duration = inTime.HasValue
             ? TimeDisplay.ElapsedSeconds(outTime, inTime.Value)
             : TimeDisplay.ElapsedSeconds(outTime);
+        var type = string.IsNullOrWhiteSpace(b.BreakType) ? BreakTypes.Comfort : b.BreakType;
 
         return new BreakSessionDto(
             b.Id,
@@ -201,6 +247,7 @@ public class BreakTrackingService : IBreakTrackingService
             b.Employee.EmployeeCode,
             b.Employee.FullName,
             b.Employee.Department.Name,
+            type,
             outTime,
             inTime,
             duration,
@@ -209,12 +256,28 @@ public class BreakTrackingService : IBreakTrackingService
             inTime is null);
     }
 
-    private static EmployeeBreakStatusDto BuildStatus(Employee employee, List<BreakSession> sessions, DateTime now, int limitMinutes)
+    private static EmployeeBreakStatusDto BuildStatus(
+        Employee employee,
+        List<BreakSession> sessions,
+        DateTime now,
+        int comfortLimitMinutes,
+        int mealLimitMinutes)
     {
         var localNow = TimeDisplay.AsLocal(now);
-        var total = TimeDisplay.ComputeDailyTotalSeconds(sessions, localNow);
-        var (status, color) = BreakStatusCodes.FromTotalSeconds(total, limitMinutes);
+        var comfortSessions = sessions.Where(s =>
+            BreakTypes.Comfort.Equals(string.IsNullOrWhiteSpace(s.BreakType) ? BreakTypes.Comfort : s.BreakType, StringComparison.OrdinalIgnoreCase)).ToList();
+        var mealSessions = sessions.Where(s =>
+            BreakTypes.Meal.Equals(s.BreakType, StringComparison.OrdinalIgnoreCase)).ToList();
+
+        var comfortTotal = TimeDisplay.ComputeDailyTotalSeconds(comfortSessions, localNow);
+        var mealTotal = TimeDisplay.ComputeDailyTotalSeconds(mealSessions, localNow);
+        var (comfortStatus, comfortColor) = BreakStatusCodes.FromTotalSeconds(comfortTotal, comfortLimitMinutes);
+        var (mealStatus, mealColor) = BreakStatusCodes.FromTotalSeconds(mealTotal, mealLimitMinutes);
+
         var open = sessions.FirstOrDefault(s => s.InTime is null);
+        var openType = open is null
+            ? null
+            : (string.IsNullOrWhiteSpace(open.BreakType) ? BreakTypes.Comfort : BreakTypes.Normalize(open.BreakType));
         var openOut = open is null ? (DateTime?)null : TimeDisplay.AsLocal(open.OutTime);
 
         return new EmployeeBreakStatusDto(
@@ -223,13 +286,19 @@ public class BreakTrackingService : IBreakTrackingService
             employee.FullName,
             employee.DepartmentId,
             employee.Department.Name,
-            total,
-            TimeDisplay.FormatSeconds(total),
-            status,
-            color,
+            comfortTotal,
+            TimeDisplay.FormatSeconds(comfortTotal),
+            comfortStatus,
+            comfortColor,
+            comfortSessions.Count(s => s.InTime.HasValue),
+            mealTotal,
+            TimeDisplay.FormatSeconds(mealTotal),
+            mealStatus,
+            mealColor,
+            mealSessions.Count(s => s.InTime.HasValue),
             open is not null,
+            openType,
             openOut,
-            openOut is null ? null : TimeDisplay.ElapsedSeconds(openOut.Value, localNow),
-            sessions.Count(s => s.InTime.HasValue));
+            openOut is null ? null : TimeDisplay.ElapsedSeconds(openOut.Value, localNow));
     }
 }

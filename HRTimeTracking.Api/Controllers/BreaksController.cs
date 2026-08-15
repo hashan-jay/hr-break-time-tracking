@@ -41,21 +41,19 @@ public class BreaksController : ControllerBase
         [FromQuery] string? from = null,
         [FromQuery] string? to = null,
         [FromQuery] int? employeeId = null,
-        [FromQuery] int? departmentId = null)
+        [FromQuery] int? departmentId = null,
+        [FromQuery] string? breakType = null)
     {
         DateOnly? fromDate = DateOnly.TryParse(from, out var f) ? f : null;
         DateOnly? toDate = DateOnly.TryParse(to, out var t) ? t : null;
-        return Ok(await _service.GetSessionsAsync(fromDate, toDate, employeeId, departmentId));
+        return Ok(await _service.GetSessionsAsync(fromDate, toDate, employeeId, departmentId, breakType));
     }
 
-    /// <summary>
-    /// Single-button capture: records out-time if employee is in, or in-time if currently on break.
-    /// </summary>
     [HttpPost("toggle")]
     [Authorize(Roles = $"{AppRoles.Developer},{AppRoles.HRManager},{AppRoles.HRAssistant}")]
     public async Task<ActionResult<EmployeeBreakStatusDto>> Toggle([FromBody] ToggleBreakRequest request)
     {
-        var (ok, error, data) = await _service.ToggleAsync(request.EmployeeId, User.GetUserId());
+        var (ok, error, data) = await _service.ToggleAsync(request.EmployeeId, request.BreakType, User.GetUserId());
         if (!ok || data is null) return BadRequest(new ApiMessage(error ?? "Toggle failed."));
         return Ok(data);
     }
@@ -64,7 +62,7 @@ public class BreaksController : ControllerBase
     [Authorize(Roles = $"{AppRoles.Developer},{AppRoles.HRManager},{AppRoles.HRAssistant}")]
     public async Task<ActionResult<EmployeeBreakStatusDto>> Out([FromBody] ToggleBreakRequest request)
     {
-        var (ok, error, data) = await _service.RecordOutAsync(request.EmployeeId, User.GetUserId());
+        var (ok, error, data) = await _service.RecordOutAsync(request.EmployeeId, request.BreakType, User.GetUserId());
         if (!ok || data is null) return BadRequest(new ApiMessage(error ?? "Out-time failed."));
         return Ok(data);
     }
@@ -73,7 +71,7 @@ public class BreaksController : ControllerBase
     [Authorize(Roles = $"{AppRoles.Developer},{AppRoles.HRManager},{AppRoles.HRAssistant}")]
     public async Task<ActionResult<EmployeeBreakStatusDto>> In([FromBody] ToggleBreakRequest request)
     {
-        var (ok, error, data) = await _service.RecordInAsync(request.EmployeeId, User.GetUserId());
+        var (ok, error, data) = await _service.RecordInAsync(request.EmployeeId, request.BreakType, User.GetUserId());
         if (!ok || data is null) return BadRequest(new ApiMessage(error ?? "In-time failed."));
         return Ok(data);
     }

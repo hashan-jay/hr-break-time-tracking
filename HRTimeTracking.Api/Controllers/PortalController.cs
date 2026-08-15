@@ -37,7 +37,7 @@ public class PortalController : ControllerBase
     [HttpPost("toggle")]
     public async Task<ActionResult<EmployeeBreakStatusDto>> Toggle([FromBody] ToggleBreakRequest request)
     {
-        var (ok, error, data) = await _breaks.ToggleAsync(request.EmployeeId, userId: null);
+        var (ok, error, data) = await _breaks.ToggleAsync(request.EmployeeId, request.BreakType, userId: null);
         if (!ok || data is null) return BadRequest(new ApiMessage(error ?? "Toggle failed."));
         return Ok(data);
     }

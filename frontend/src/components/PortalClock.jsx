@@ -4,7 +4,7 @@ function pad(n) {
   return String(n).padStart(2, '0');
 }
 
-export default function PortalClock() {
+export default function PortalClock({ size = 'default' }) {
   const [now, setNow] = useState(() => new Date());
 
   useEffect(() => {
@@ -20,7 +20,7 @@ export default function PortalClock() {
   });
 
   return (
-    <div className="portal-clock" aria-live="polite">
+    <div className={`portal-clock ${size === 'large' ? 'portal-clock--large' : ''}`} aria-live="polite">
       <div className="portal-clock__time">{time}</div>
       <div className="portal-clock__date">{date}</div>
     </div>
