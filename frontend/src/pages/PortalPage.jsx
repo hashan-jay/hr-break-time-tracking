@@ -85,6 +85,8 @@ function PortalBreakSection({
                           ? `On break (${formatElapsed(e.currentBreakElapsedSeconds)})`
                           : blocked
                             ? `On ${e.currentBreakType}`
+                          : e.isWithinShift === false
+                            ? 'Off shift'
                             : 'In office'}
                       </td>
                     </tr>
@@ -388,7 +390,7 @@ export default function PortalPage() {
         <p className="hint">
           {board?.periodLabel
             ? `Shift window: ${board.periodLabel}`
-            : 'Meal and Comfort totals are counted for the selected shift window, including overnight shifts.'}
+            : 'This shift totals run only while the shift is live (for example 20:00–08:00). They reset when the shift ends, before the next one starts.'}
         </p>
 
         <div className="break-type-stack">

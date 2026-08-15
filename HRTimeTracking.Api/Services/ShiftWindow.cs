@@ -32,13 +32,72 @@ public static class ShiftWindow
         => CalendarDay(DateOnly.FromDateTime(TimeDisplay.AsLocal(now)));
 
     /// <summary>
-    /// Current (or most recently started) period for live tracking.
-    /// After a night shift ends and before the next one starts, the completed
-    /// overnight window is kept so HR can still review last night's totals.
+    /// The shift window that is live at this instant. Returns null between shifts
+    /// so This-shift totals reset before the next shift starts.
+    /// Employees with no shift assigned use the local calendar day.
+    /// </summary>
+    public static ShiftPeriod? ActiveAt(Shift? shift, DateTime now)
+    {
+        now = TimeDisplay.AsLocal(now);
+        if (shift is null)
+            return CalendarDay(now);
+
+        var date = DateOnly.FromDateTime(now);
+
+        if (shift.SpansNextDay)
+        {
+            var tonightStart = date.ToDateTime(shift.StartTime, DateTimeKind.Local);
+            var tonightEnd = date.AddDays(1).ToDateTime(shift.EndTime, DateTimeKind.Local);
+            if (now >= tonightStart && now < tonightEnd)
+                return new ShiftPeriod(tonightStart, tonightEnd);
+
+            var lastStart = date.AddDays(-1).ToDateTime(shift.StartTime, DateTimeKind.Local);
+            var lastEnd = date.ToDateTime(shift.EndTime, DateTimeKind.Local);
+            if (now >= lastStart && now < lastEnd)
+                return new ShiftPeriod(lastStart, lastEnd);
+
+            return null;
+        }
+
+        var start = date.ToDateTime(shift.StartTime, DateTimeKind.Local);
+        var end = date.ToDateTime(shift.EndTime, DateTimeKind.Local);
+        if (now >= start && now < end)
+            return new ShiftPeriod(start, end);
+
+        return null;
+    }
+
+    /// <summary>
+    /// Next shift start after an off-shift gap (for live "reset until" labels).
+    /// </summary>
+    public static DateTime? NextStart(Shift? shift, DateTime now)
+    {
+        if (shift is null) return null;
+        now = TimeDisplay.AsLocal(now);
+        var date = DateOnly.FromDateTime(now);
+        var todayStart = date.ToDateTime(shift.StartTime, DateTimeKind.Local);
+        if (now < todayStart)
+            return todayStart;
+        return date.AddDays(1).ToDateTime(shift.StartTime, DateTimeKind.Local);
+    }
+
+    /// <summary>
+    /// Period a stored out-time belongs to for shift-strict reports.
+    /// Null when the employee has a shift but the out-time is between shifts.
+    /// </summary>
+    public static ShiftPeriod? ReportPeriod(Shift? shift, DateTime outTime)
+        => ActiveAt(shift, outTime);
+
+    /// <summary>
+    /// Current (or most recently started) period. Prefer <see cref="ActiveAt"/> for live totals.
     /// </summary>
     public static ShiftPeriod Resolve(Shift? shift, DateTime now)
     {
         now = TimeDisplay.AsLocal(now);
+        var active = ActiveAt(shift, now);
+        if (active.HasValue)
+            return active.Value;
+
         if (shift is null)
             return CalendarDay(now);
 
@@ -48,15 +107,11 @@ public static class ShiftWindow
     }
 
     /// <summary>
-    /// Period that a break out-time belongs to (same rules as live tracking).
-    /// Out-times in the daytime gap of an overnight shift use the calendar day
-    /// so Start/End still records a visible session.
+    /// Period used when recording a new out-time. Between shifts, calendar day is
+    /// stored on the row but shift reports ignore those off-shift sessions.
     /// </summary>
     public static ShiftPeriod ForOutTime(Shift? shift, DateTime outTime)
-    {
-        var period = Resolve(shift, outTime);
-        return period.Contains(outTime) ? period : CalendarDay(outTime);
-    }
+        => ActiveAt(shift, outTime) ?? CalendarDay(outTime);
 
     public static ShiftPeriod StartingOn(Shift shift, DateOnly startDate)
     {

@@ -22,17 +22,17 @@ export default function BreakReportDocument({ report, filters }) {
     <div className="break-report-document">
       <header className="break-report-document__header print-header">
         <h1>HR Break Time Tracking</h1>
-        <h2>Employee Shift-wise Meal & Comfort Break Report</h2>
+        <h2>Employee Shift-period Meal & Comfort Break Report</h2>
         <p>Generated {generatedAt} (PC local time)</p>
       </header>
 
       <section className="break-report-document__meta print-section">
         <div>
-          <span>Period from</span>
+          <span>Shift start from</span>
           <strong>{report.from}</strong>
         </div>
         <div>
-          <span>Period to</span>
+          <span>Shift start to</span>
           <strong>{report.to}</strong>
         </div>
         <div>
@@ -85,7 +85,7 @@ export default function BreakReportDocument({ report, filters }) {
         <table className="break-report-document__table print-table">
           <thead>
             <tr>
-              <th>Shift date</th>
+              <th>Shift start date</th>
               <th>Code</th>
               <th>Employee</th>
               <th>Department</th>
@@ -149,11 +149,11 @@ export function renderBreakReportHtml(report, filters) {
 
   return `
     <h1>HR Break Time Tracking</h1>
-    <h2>Employee Shift-wise Meal & Comfort Break Report</h2>
+    <h2>Employee Shift-period Meal & Comfort Break Report</h2>
     <p>Generated ${escapeHtml(generatedAt)} (PC local time)</p>
     <div class="meta">
-      <div><span>Period from</span><strong>${report.from}</strong></div>
-      <div><span>Period to</span><strong>${report.to}</strong></div>
+      <div><span>Shift start from</span><strong>${report.from}</strong></div>
+      <div><span>Shift start to</span><strong>${report.to}</strong></div>
       <div><span>Shift</span><strong>${escapeHtml(shiftLabel)}</strong></div>
       <div><span>Department</span><strong>${escapeHtml(deptLabel)}</strong></div>
       <div><span>Employee</span><strong>${escapeHtml(empLabel)}</strong></div>
@@ -170,7 +170,7 @@ export function renderBreakReportHtml(report, filters) {
     <table>
       <thead>
         <tr>
-          <th>Shift date</th><th>Code</th><th>Employee</th><th>Department</th><th>Shift</th>
+          <th>Shift start date</th><th>Code</th><th>Employee</th><th>Department</th><th>Shift</th>
           <th>Meal</th><th>Meal status</th><th>Comfort</th><th>Comfort status</th>
         </tr>
       </thead>

@@ -94,10 +94,13 @@ public class ReportService : IReportService
         var grouped = sessions
             .Select(s =>
             {
-                var period = ShiftWindow.ForOutTime(s.Employee.Shift, s.OutTime);
+                var period = ShiftWindow.ReportPeriod(s.Employee.Shift, s.OutTime);
                 return new { Session = s, Period = period };
             })
-            .Where(x => ShiftWindow.Overlaps(x.Period, from, to))
+            .Where(x => x.Period.HasValue &&
+                        x.Period.Value.StartDate >= from &&
+                        x.Period.Value.StartDate <= to)
+            .Select(x => new { x.Session, Period = x.Period!.Value })
             .GroupBy(x => new
             {
                 x.Session.EmployeeId,

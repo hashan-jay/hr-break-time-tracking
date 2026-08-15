@@ -132,8 +132,9 @@ export default function ReportsPage() {
         <div>
           <h1>Reports</h1>
           <p>
-            Filter by date, shift, department, or employee. Totals are shift-wise: overnight shifts
-            (for example 20:00–08:00) stay on one row and do not split at midnight.
+            Filter by shift start date, shift, department, or employee. Each row is one shift
+            period only (a 20:00–08:00 night is dated by the day it started). Totals do not
+            carry into the next shift.
           </p>
         </div>
         <div className="header-actions">
@@ -153,11 +154,11 @@ export default function ReportsPage() {
 
       <div className="toolbar report-filters no-print">
         <label>
-          Start date
+          Shift start from
           <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
         </label>
         <label>
-          End date
+          Shift start to
           <input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
         </label>
         <label>
@@ -208,7 +209,7 @@ export default function ReportsPage() {
             <table>
               <thead>
                 <tr>
-                  <th>Shift date</th>
+                  <th>Shift start date</th>
                   <th>Code</th>
                   <th>Employee</th>
                   <th>Department</th>

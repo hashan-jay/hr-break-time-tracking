@@ -87,6 +87,8 @@ function BreakTypeBoard({
                         ? `On ${breakType.toLowerCase()} break (${formatElapsed(e.currentBreakElapsedSeconds)}) · out ${formatLocalClock(e.currentOutTime)}`
                         : blocked
                           ? `On ${e.currentBreakType} break`
+                          : e.isWithinShift === false
+                          ? 'Off shift'
                           : 'In office'}
                     </td>
                   </tr>
@@ -306,8 +308,9 @@ export default function TrackingPage() {
         <div>
           <h1>Live Tracking</h1>
           <p>
-            Capture Meal Break and Comfort Break separately. Totals are shift-wise, including overnight
-            shifts (for example 20:00–08:00). Select an employee in a section, then press{' '}
+            Capture Meal Break and Comfort Break separately. This shift totals reset when the
+            current shift ends, before the next shift starts. Overnight 20:00–08:00 stays one
+            period. Select an employee in a section, then press{' '}
             <kbd>Enter</kbd> / <kbd>Space</kbd> to toggle. Times use this PC&apos;s local clock.
           </p>
         </div>

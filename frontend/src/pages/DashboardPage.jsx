@@ -206,8 +206,8 @@ export default function DashboardPage() {
               <div className="portal-section-head">
                 <h2>This shift totals</h2>
                 <p>
-                  Total = closed (in − out) + live timer while a break is open. Meal and Comfort
-                  are counted separately for the current shift window.
+                  Closed (in − out) plus the live timer while a break is open. Totals reset when
+                  the current shift ends, before the next shift starts.
                 </p>
               </div>
               <div className="table-wrap">
@@ -242,7 +242,9 @@ export default function DashboardPage() {
                           <td>
                             {e.isOnBreak
                               ? `On ${e.currentBreakType} (${formatElapsed(e.currentBreakElapsedSeconds)})`
-                              : 'In office'}
+                              : e.isWithinShift === false
+                                ? 'Off shift'
+                                : 'In office'}
                           </td>
                         </tr>
                       );
