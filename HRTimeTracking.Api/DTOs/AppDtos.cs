@@ -142,7 +142,9 @@ public record EmployeeBreakStatusDto(
     bool IsWithinShift = true,
     string? ShiftName = null,
     string? ShiftDisplay = null,
-    DateTime? NextShiftStart = null)
+    DateTime? NextShiftStart = null,
+    int ComfortStartCountToday = 0,
+    int MealStartCountToday = 0)
 {
     public bool IsOnComfortBreak => IsOnBreak && CurrentBreakType == BreakTypes.Comfort;
     public bool IsOnMealBreak => IsOnBreak && CurrentBreakType == BreakTypes.Meal;
@@ -168,7 +170,9 @@ public record LiveBoardDto(
     int MealWellSatisfiedCount,
     DateTime? PeriodStart = null,
     DateTime? PeriodEnd = null,
-    string? PeriodLabel = null);
+    string? PeriodLabel = null,
+    int ComfortStartLimit = BreakStatusCodes.DefaultComfortStartLimit,
+    int MealStartLimit = BreakStatusCodes.DefaultMealStartLimit);
 
 public record ReportRowDto(
     int EmployeeId,
@@ -206,7 +210,9 @@ public record ReportSummaryDto(
     int? ShiftId,
     string? ShiftName,
     string? ShiftDisplay,
-    IReadOnlyList<ReportRowDto> Rows);
+    IReadOnlyList<ReportRowDto> Rows,
+    int ComfortStartLimit = BreakStatusCodes.DefaultComfortStartLimit,
+    int MealStartLimit = BreakStatusCodes.DefaultMealStartLimit);
 
 public record DashboardDto(
     int ActiveEmployees,
@@ -221,7 +227,9 @@ public record DashboardDto(
     int MealSatisfiedToday,
     int MealWellSatisfiedToday,
     int ComfortLimitMinutes,
-    int MealLimitMinutes);
+    int MealLimitMinutes,
+    int ComfortStartLimit = BreakStatusCodes.DefaultComfortStartLimit,
+    int MealStartLimit = BreakStatusCodes.DefaultMealStartLimit);
 
 public record SystemSettingDto(int Id, string Key, string Value, string? Description);
 

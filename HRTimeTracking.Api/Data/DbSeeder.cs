@@ -75,6 +75,29 @@ public static class DbSeeder
             await db.SaveChangesAsync();
         }
 
+        // Additive: start-count limits. Insert only; never overwrite existing values.
+        if (!await db.SystemSettings.AnyAsync(s => s.Key == Services.SettingsService.MealStartLimitKey))
+        {
+            db.SystemSettings.Add(new SystemSetting
+            {
+                Key = Services.SettingsService.MealStartLimitKey,
+                Value = BreakStatusCodes.DefaultMealStartLimit.ToString(),
+                Description = "Maximum Meal break starts allowed per employee per shift (Developer adjustable)."
+            });
+            await db.SaveChangesAsync();
+        }
+
+        if (!await db.SystemSettings.AnyAsync(s => s.Key == Services.SettingsService.ComfortStartLimitKey))
+        {
+            db.SystemSettings.Add(new SystemSetting
+            {
+                Key = Services.SettingsService.ComfortStartLimitKey,
+                Value = BreakStatusCodes.DefaultComfortStartLimit.ToString(),
+                Description = "Maximum Comfort break starts allowed per employee per shift (Developer adjustable)."
+            });
+            await db.SaveChangesAsync();
+        }
+
         // Soft-update legacy description only (value untouched).
         var legacySetting = await db.SystemSettings.FirstOrDefaultAsync(s => s.Key == Services.SettingsService.DailyLimitKey);
         if (legacySetting is not null &&

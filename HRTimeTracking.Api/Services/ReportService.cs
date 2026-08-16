@@ -41,7 +41,9 @@ public class ReportService : IReportService
             board.MealSatisfiedCount,
             board.MealWellSatisfiedCount,
             board.ComfortLimitMinutes,
-            board.MealLimitMinutes);
+            board.MealLimitMinutes,
+            board.ComfortStartLimit,
+            board.MealStartLimit);
     }
 
     public async Task<ReportSummaryDto> GetReportAsync(DateOnly from, DateOnly to, int? departmentId, int? employeeId, int? shiftId)
@@ -49,6 +51,8 @@ public class ReportService : IReportService
         if (to < from) (from, to) = (to, from);
         var comfortLimit = await _settings.GetComfortLimitMinutesAsync();
         var mealLimit = await _settings.GetMealLimitMinutesAsync();
+        var comfortStartLimit = await _settings.GetComfortStartLimitAsync();
+        var mealStartLimit = await _settings.GetMealStartLimitAsync();
 
         Shift? selectedShift = null;
         string? shiftName = null;
@@ -182,7 +186,9 @@ public class ReportService : IReportService
             shiftId,
             shiftName,
             shiftDisplay,
-            rows);
+            rows,
+            comfortStartLimit,
+            mealStartLimit);
     }
 
     private static (int TotalSeconds, int Count, bool Exceeded) SumBreakType(

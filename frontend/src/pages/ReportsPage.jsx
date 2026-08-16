@@ -240,8 +240,8 @@ export default function ReportsPage() {
       {report && (
         <>
           <p className="hint no-print">
-            Limits — Meal: <strong>{report.mealLimitMinutes} min</strong> · Comfort:{' '}
-            <strong>{report.comfortLimitMinutes} min</strong>
+            Limits — Meal: <strong>{report.mealLimitMinutes} min</strong> ({report.mealStartLimit ?? 1} starts)
+            {' · '}Comfort: <strong>{report.comfortLimitMinutes} min</strong> ({report.comfortStartLimit ?? 2} starts)
             {(report.shiftDisplay || report.shiftName) ? (
               <> · Shift: <strong>{report.shiftDisplay || report.shiftName}</strong></>
             ) : null}

@@ -121,6 +121,7 @@ export function typeFields(employee, breakType) {
       statusColor: employee.mealStatusColor,
       isOnThisBreak: employee.isOnBreak && employee.currentBreakType === BREAK_TYPES.MEAL,
       blockedByOther: Boolean(employee.isOnBreak && employee.currentBreakType !== BREAK_TYPES.MEAL),
+      startCount: employee.mealStartCountToday ?? 0,
     };
   }
   return {
@@ -130,12 +131,34 @@ export function typeFields(employee, breakType) {
     statusColor: employee.comfortStatusColor,
     isOnThisBreak: employee.isOnBreak && employee.currentBreakType === BREAK_TYPES.COMFORT,
     blockedByOther: Boolean(employee.isOnBreak && employee.currentBreakType !== BREAK_TYPES.COMFORT),
+    startCount: employee.comfortStartCountToday ?? 0,
   };
+}
+
+export function startCount(employee, breakType) {
+  return typeFields(employee, breakType).startCount;
+}
+
+/** True when this employee cannot start another break of this type (ending an open one is still allowed). */
+export function startLimitReached(employee, breakType, startLimit) {
+  const fields = typeFields(employee, breakType);
+  if (fields.isOnThisBreak) return false;
+  const limit = Number(startLimit);
+  if (!Number.isFinite(limit) || limit <= 0) return false;
+  return fields.startCount >= limit;
+}
+
+export function startLimitReason(employee, breakType, startLimit) {
+  const used = startCount(employee, breakType);
+  const limit = Number(startLimit) || 0;
+  return `${breakType} start limit reached (${used}/${limit}) this shift`;
 }
 
 export function settingLabel(key) {
   if (key === 'MealBreakLimitMinutes') return 'Meal break daily limit (minutes)';
   if (key === 'ComfortBreakLimitMinutes') return 'Comfort break daily limit (minutes)';
+  if (key === 'MealBreakStartLimit') return 'Meal break start limit (times per shift)';
+  if (key === 'ComfortBreakStartLimit') return 'Comfort break start limit (times per shift)';
   if (key === 'DailyBreakLimitMinutes') return 'Legacy comfort limit alias (synced)';
   return key;
 }

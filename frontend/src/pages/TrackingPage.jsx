@@ -9,6 +9,8 @@ import {
   formatLocalClock,
   isOffShift,
   offShiftReason,
+  startLimitReached,
+  startLimitReason,
   typeFields,
 } from '../lib/breakHelpers';
 
@@ -17,6 +19,7 @@ function BreakTypeBoard({
   subtitle,
   breakType,
   limitMinutes,
+  startLimit,
   employees,
   selectedId,
   onSelect,
@@ -31,14 +34,18 @@ function BreakTypeBoard({
   const onThisBreak = selectedFields?.isOnThisBreak;
   const blockedByOther = selected?.isOnBreak && !onThisBreak;
   const offShift = selected ? isOffShift(selected) : false;
-  const captureLocked = Boolean(blockedByOther || (offShift && !onThisBreak));
+  const startBlocked = selected ? startLimitReached(selected, breakType, startLimit) : false;
+  const captureLocked = Boolean(blockedByOther || (offShift && !onThisBreak) || (startBlocked && !onThisBreak));
 
   return (
     <section className="break-type-board">
       <header className="break-type-board__header">
         <div>
           <h2>{title}</h2>
-          <p>{subtitle} Daily limit: <strong>{limitMinutes ?? '—'} minutes</strong>.</p>
+          <p>
+            {subtitle} Daily limit: <strong>{limitMinutes ?? '—'} minutes</strong>.
+            {' '}Starts allowed: <strong>{startLimit ?? '—'}</strong> per shift.
+          </p>
         </div>
         <div className="break-type-board__chip">
           On break{' '}
@@ -63,13 +70,19 @@ function BreakTypeBoard({
                     <strong>{selectedFields.totalDisplay}</strong> ({selectedFields.totalSeconds}s)
                   </div>
                   <div>
+                    Starts this shift:{' '}
+                    <strong>{selectedFields.startCount}/{startLimit ?? '—'}</strong>
+                  </div>
+                  <div>
                     {onThisBreak
                       ? `Out since ${formatLocalClock(selected.currentOutTime)} · open ${formatElapsed(selected.currentBreakElapsedSeconds)}`
                       : blockedByOther
                         ? `Currently on ${selected.currentBreakType} break — end that first`
                         : offShift
                           ? offShiftReason(selected)
-                          : 'Currently in office'}
+                          : startBlocked
+                            ? startLimitReason(selected, breakType, startLimit)
+                            : 'Currently in office'}
                   </div>
                 </div>
               </div>
@@ -87,7 +100,7 @@ function BreakTypeBoard({
                 <button
                   type="button"
                   className="btn btn-ghost"
-                  disabled={busy || selected.isOnBreak || offShift}
+                  disabled={busy || selected.isOnBreak || offShift || startBlocked}
                   onClick={() => onOut(breakType)}
                 >
                   Out only (O)
@@ -127,12 +140,15 @@ function BreakTypeBoard({
                 const fields = typeFields(e, breakType);
                 const blocked = fields.blockedByOther;
                 const offShift = isOffShift(e);
+                const startBlocked = startLimitReached(e, breakType, startLimit);
                 const selectable = canSelectForCapture(e, breakType);
                 const lockReason = blocked
                   ? `On ${e.currentBreakType} break — end that first`
                   : offShift
                     ? offShiftReason(e)
-                    : undefined;
+                    : startBlocked
+                      ? startLimitReason(e, breakType, startLimit)
+                      : undefined;
                 return (
                   <tr
                     key={`${breakType}-${e.employeeId}`}
@@ -141,6 +157,7 @@ function BreakTypeBoard({
                       fields.isOnThisBreak ? 'on-break' : '',
                       blocked ? 'on-other-break' : '',
                       offShift && !fields.isOnThisBreak ? 'off-shift' : '',
+                      startBlocked && !fields.isOnThisBreak && !offShift && !blocked ? 'start-limit-reached' : '',
                     ].filter(Boolean).join(' ')}
                     aria-disabled={selectable ? undefined : 'true'}
                     title={lockReason}
@@ -153,7 +170,7 @@ function BreakTypeBoard({
                     <td>{e.departmentName}</td>
                     <td className={fields.isOnThisBreak ? 'is-live-total' : undefined}>
                       <strong>{fields.totalDisplay}</strong>
-                      <div className="muted">{fields.totalSeconds}s</div>
+                      <div className="muted">{fields.totalSeconds}s · {fields.startCount}/{startLimit ?? '—'} starts</div>
                     </td>
                     <td><StatusBadge status={fields.status} color={fields.statusColor} /></td>
                     <td>
@@ -163,7 +180,9 @@ function BreakTypeBoard({
                           ? `On ${e.currentBreakType} break`
                           : offShift
                             ? 'Off shift'
-                            : 'In office'}
+                            : startBlocked
+                              ? 'Start limit reached'
+                              : 'In office'}
                     </td>
                   </tr>
                 );
@@ -281,6 +300,12 @@ export default function TrackingPage() {
         : `On ${employee.currentBreakType} break — end that first.`);
       return;
     }
+    const limit = breakType === BREAK_TYPES.MEAL ? board?.mealStartLimit : board?.comfortStartLimit;
+    if (employee && (mode === 'toggle' || mode === 'out') && startLimitReached(employee, breakType, limit)) {
+      setMsgType('error');
+      setMessage(startLimitReason(employee, breakType, limit));
+      return;
+    }
     busyRef.current = true;
     setBusy(true);
     try {
@@ -300,7 +325,7 @@ export default function TrackingPage() {
       busyRef.current = false;
       setBusy(false);
     }
-  }, [selectedMealId, selectedComfortId, load, employeesView]);
+  }, [selectedMealId, selectedComfortId, load, employeesView, board]);
 
   useEffect(() => {
     const onKey = (e) => {
@@ -398,6 +423,7 @@ export default function TrackingPage() {
             subtitle="Lunch / meal time tracking."
             breakType={BREAK_TYPES.MEAL}
             limitMinutes={board?.mealLimitMinutes}
+            startLimit={board?.mealStartLimit}
             employees={employeesView}
             selectedId={selectedMealId}
             onSelect={(id) => {
@@ -418,6 +444,7 @@ export default function TrackingPage() {
             subtitle="Short comfort break tracking."
             breakType={BREAK_TYPES.COMFORT}
             limitMinutes={board?.comfortLimitMinutes}
+            startLimit={board?.comfortStartLimit}
             employees={employeesView}
             selectedId={selectedComfortId}
             onSelect={(id) => {

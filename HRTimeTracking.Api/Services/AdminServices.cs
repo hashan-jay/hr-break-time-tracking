@@ -142,6 +142,8 @@ public interface ISettingsService
     Task<int> GetDailyLimitMinutesAsync();
     Task<int> GetComfortLimitMinutesAsync();
     Task<int> GetMealLimitMinutesAsync();
+    Task<int> GetComfortStartLimitAsync();
+    Task<int> GetMealStartLimitAsync();
 }
 
 public class SettingsService : ISettingsService
@@ -150,6 +152,8 @@ public class SettingsService : ISettingsService
     public const string DailyLimitKey = "DailyBreakLimitMinutes";
     public const string ComfortLimitKey = "ComfortBreakLimitMinutes";
     public const string MealLimitKey = "MealBreakLimitMinutes";
+    public const string ComfortStartLimitKey = "ComfortBreakStartLimit";
+    public const string MealStartLimitKey = "MealBreakStartLimit";
 
     private readonly AppDbContext _db;
     private readonly IAuditService _audit;
@@ -173,9 +177,13 @@ public class SettingsService : ISettingsService
         var setting = await _db.SystemSettings.FirstOrDefaultAsync(s => s.Key == key);
         if (setting is null) return (false, "Setting not found.", null);
 
-        var isLimitKey = key is DailyLimitKey or ComfortLimitKey or MealLimitKey;
-        if (isLimitKey && (!int.TryParse(value, out var minutes) || minutes < 1 || minutes > 240))
+        var isDurationKey = key is DailyLimitKey or ComfortLimitKey or MealLimitKey;
+        if (isDurationKey && (!int.TryParse(value, out var minutes) || minutes < 1 || minutes > 240))
             return (false, "Break limit must be between 1 and 240 minutes.", null);
+
+        var isStartKey = key is ComfortStartLimitKey or MealStartLimitKey;
+        if (isStartKey && (!int.TryParse(value, out var starts) || starts < BreakStatusCodes.MinStartLimit || starts > BreakStatusCodes.MaxStartLimit))
+            return (false, $"Break start limit must be between {BreakStatusCodes.MinStartLimit} and {BreakStatusCodes.MaxStartLimit} times per shift.", null);
 
         var trimmed = value.Trim();
         setting.Value = trimmed;
@@ -215,5 +223,22 @@ public class SettingsService : ISettingsService
             .FirstOrDefaultAsync();
 
         return int.TryParse(value, out var minutes) ? minutes : BreakStatusCodes.DefaultMealLimitMinutes;
+    }
+
+    public Task<int> GetComfortStartLimitAsync() => GetStartLimitAsync(ComfortStartLimitKey, BreakStatusCodes.DefaultComfortStartLimit);
+
+    public Task<int> GetMealStartLimitAsync() => GetStartLimitAsync(MealStartLimitKey, BreakStatusCodes.DefaultMealStartLimit);
+
+    private async Task<int> GetStartLimitAsync(string key, int fallback)
+    {
+        var value = await _db.SystemSettings.AsNoTracking()
+            .Where(s => s.Key == key)
+            .Select(s => s.Value)
+            .FirstOrDefaultAsync();
+
+        if (!int.TryParse(value, out var starts))
+            return fallback;
+
+        return Math.Clamp(starts, BreakStatusCodes.MinStartLimit, BreakStatusCodes.MaxStartLimit);
     }
 }

@@ -824,7 +824,9 @@ td.is-live-total strong {
 .portal-board__table tbody tr.on-other-break,
 .break-type-board tbody tr.on-other-break,
 .portal-board__table tbody tr.off-shift,
-.break-type-board tbody tr.off-shift {
+.break-type-board tbody tr.off-shift,
+.portal-board__table tbody tr.start-limit-reached,
+.break-type-board tbody tr.start-limit-reached {
   background: #f3f4f6;
   color: #9ca3af;
   cursor: not-allowed;
@@ -838,7 +840,11 @@ td.is-live-total strong {
 .portal-board__table tbody tr.off-shift .col-name,
 .break-type-board tbody tr.off-shift .col-name,
 .portal-board__table tbody tr.off-shift td:nth-child(2),
-.break-type-board tbody tr.off-shift td:nth-child(2) {
+.break-type-board tbody tr.off-shift td:nth-child(2),
+.portal-board__table tbody tr.start-limit-reached .col-name,
+.break-type-board tbody tr.start-limit-reached .col-name,
+.portal-board__table tbody tr.start-limit-reached td:nth-child(2),
+.break-type-board tbody tr.start-limit-reached td:nth-child(2) {
   color: #9ca3af;
   font-weight: 600;
 }
@@ -848,7 +854,10 @@ td.is-live-total strong {
 tbody tr.on-other-break:hover,
 .portal-shell tbody tr.off-shift:hover,
 .app-portal tbody tr.off-shift:hover,
-tbody tr.off-shift:hover {
+tbody tr.off-shift:hover,
+.portal-shell tbody tr.start-limit-reached:hover,
+.app-portal tbody tr.start-limit-reached:hover,
+tbody tr.start-limit-reached:hover {
   background: #f3f4f6;
 }
 
@@ -857,8 +866,16 @@ tbody tr.off-shift:hover {
 tbody tr.on-other-break.selected,
 .portal-shell tbody tr.off-shift.selected,
 .app-portal tbody tr.off-shift.selected,
-tbody tr.off-shift.selected {
+tbody tr.off-shift.selected,
+.portal-shell tbody tr.start-limit-reached.selected,
+.app-portal tbody tr.start-limit-reached.selected,
+tbody tr.start-limit-reached.selected {
   background: #f3f4f6;
+}
+
+.portal-board__table tbody tr.start-limit-reached,
+.break-type-board tbody tr.start-limit-reached {
+  cursor: pointer;
 }
 
 .portal-capture {

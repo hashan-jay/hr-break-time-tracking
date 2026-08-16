@@ -89,5 +89,24 @@ public static class SchemaEnsure
                     ON dbo.BreakSessions (EmployeeId, BreakType, BreakDate);
             END
             """);
+
+        // Additive start-count settings. Insert only; never update existing values.
+        await db.Database.ExecuteSqlRawAsync("""
+            IF OBJECT_ID(N'dbo.SystemSettings', N'U') IS NOT NULL
+               AND NOT EXISTS (SELECT 1 FROM dbo.SystemSettings WHERE [Key] = N'MealBreakStartLimit')
+            BEGIN
+                INSERT INTO dbo.SystemSettings ([Key], [Value], [Description])
+                VALUES (N'MealBreakStartLimit', N'1', N'Maximum Meal break starts allowed per employee per shift (Developer adjustable).');
+            END
+            """);
+
+        await db.Database.ExecuteSqlRawAsync("""
+            IF OBJECT_ID(N'dbo.SystemSettings', N'U') IS NOT NULL
+               AND NOT EXISTS (SELECT 1 FROM dbo.SystemSettings WHERE [Key] = N'ComfortBreakStartLimit')
+            BEGIN
+                INSERT INTO dbo.SystemSettings ([Key], [Value], [Description])
+                VALUES (N'ComfortBreakStartLimit', N'2', N'Maximum Comfort break starts allowed per employee per shift (Developer adjustable).');
+            END
+            """);
     }
 }

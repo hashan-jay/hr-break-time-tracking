@@ -4,6 +4,10 @@ public static class BreakStatusCodes
 {
     public const int DefaultComfortLimitMinutes = 20;
     public const int DefaultMealLimitMinutes = 60;
+    public const int DefaultMealStartLimit = 1;
+    public const int DefaultComfortStartLimit = 2;
+    public const int MinStartLimit = 1;
+    public const int MaxStartLimit = 20;
 
     /// <summary>Legacy alias kept for older references; equals Comfort default.</summary>
     public const int DefaultDailyLimitMinutes = DefaultComfortLimitMinutes;
