@@ -6,7 +6,8 @@ import { useAuth } from '../auth/AuthContext';
 const emptyForm = { name: '', description: '' };
 
 export default function DepartmentsPage() {
-  const { isDeveloper } = useAuth();
+  const { can } = useAuth();
+  const canEdit = can('departments');
   const [items, setItems] = useState([]);
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState(null);
@@ -15,7 +16,7 @@ export default function DepartmentsPage() {
 
   const load = async () => {
     const { data } = await api.get('/departments', {
-      params: { includeDeleted: isDeveloper || undefined },
+      params: { includeDeleted: canEdit || undefined },
     });
     setItems(data);
   };
@@ -26,11 +27,11 @@ export default function DepartmentsPage() {
       setMessage(err.response?.data?.message || 'Failed to load departments.');
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isDeveloper]);
+  }, [canEdit]);
 
   const onSubmit = async (e) => {
     e.preventDefault();
-    if (!isDeveloper) return;
+    if (!canEdit) return;
     try {
       if (editingId) {
         await api.put(`/departments/${editingId}`, form);
@@ -90,8 +91,8 @@ export default function DepartmentsPage() {
 
       <MessageBar message={message} type={msgType} onClose={() => setMessage('')} />
 
-      <div className={isDeveloper ? 'split-forms' : undefined}>
-        {isDeveloper && (
+      <div className={canEdit ? 'split-forms' : undefined}>
+        {canEdit && (
           <form className="card-form" onSubmit={onSubmit}>
             <h2>{editingId ? 'Edit department' : 'Add department'}</h2>
             <label>
@@ -119,8 +120,8 @@ export default function DepartmentsPage() {
               <tr>
                 <th>Name</th>
                 <th>Employees</th>
-                {isDeveloper && <th>Status</th>}
-                {isDeveloper && <th />}
+                {canEdit && <th>Status</th>}
+                {canEdit && <th />}
               </tr>
             </thead>
             <tbody>
@@ -131,14 +132,14 @@ export default function DepartmentsPage() {
                     <div className="muted">{d.description || '—'}</div>
                   </td>
                   <td>{d.employeeCount}</td>
-                  {isDeveloper && (
+                  {canEdit && (
                     <td>
                       {d.isDeleted
                         ? <span className="status-badge status-red">Deleted</span>
                         : <span className="status-badge status-green">Active</span>}
                     </td>
                   )}
-                  {isDeveloper && (
+                  {canEdit && (
                     <td className="row-actions">
                       {!d.isDeleted && (
                         <>

@@ -16,6 +16,8 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<BreakSession> BreakSessions => Set<BreakSession>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
     public DbSet<SystemSetting> SystemSettings => Set<SystemSetting>();
+    public DbSet<RolePermission> RolePermissions => Set<RolePermission>();
+    public DbSet<UserPermission> UserPermissions => Set<UserPermission>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -100,6 +102,24 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
             entity.Property(x => x.Key).HasMaxLength(100).IsRequired();
             entity.Property(x => x.Value).HasMaxLength(500).IsRequired();
             entity.Property(x => x.Description).HasMaxLength(250);
+        });
+
+        builder.Entity<RolePermission>(entity =>
+        {
+            entity.HasIndex(x => new { x.RoleName, x.SectionKey }).IsUnique();
+            entity.Property(x => x.RoleName).HasMaxLength(50).IsRequired();
+            entity.Property(x => x.SectionKey).HasMaxLength(50).IsRequired();
+        });
+
+        builder.Entity<UserPermission>(entity =>
+        {
+            entity.HasIndex(x => new { x.UserId, x.SectionKey }).IsUnique();
+            entity.Property(x => x.UserId).HasMaxLength(450).IsRequired();
+            entity.Property(x => x.SectionKey).HasMaxLength(50).IsRequired();
+            entity.HasOne(x => x.User)
+                .WithMany()
+                .HasForeignKey(x => x.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
     }
 }

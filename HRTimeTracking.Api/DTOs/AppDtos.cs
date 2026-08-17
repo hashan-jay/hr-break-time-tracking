@@ -20,7 +20,8 @@ public record UserDto(
     IReadOnlyList<string> Roles,
     bool IsActive,
     DateTime CreatedAt,
-    DateTime? LastLoginAt);
+    DateTime? LastLoginAt,
+    IReadOnlyList<string> Permissions);
 
 public record CreateUserRequest(
     [Required] string UserName,
@@ -37,6 +38,16 @@ public record UpdateUserRequest(
 
 public record ChangePasswordRequest(
     [Required, MinLength(8)] string NewPassword);
+
+public record SectionCatalogItem(string Key, string Label);
+
+public record RoleAccessDto(
+    string Role,
+    string RoleLabel,
+    IReadOnlyList<string> Sections,
+    bool Locked);
+
+public record UpdateSectionsRequest([Required] IReadOnlyList<string> Sections);
 
 public record DepartmentDto(
     int Id,

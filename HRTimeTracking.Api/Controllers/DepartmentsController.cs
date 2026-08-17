@@ -1,3 +1,4 @@
+using HRTimeTracking.Api.Authorization;
 using HRTimeTracking.Api.DTOs;
 using HRTimeTracking.Api.Models;
 using HRTimeTracking.Api.Services;
@@ -12,35 +13,38 @@ namespace HRTimeTracking.Api.Controllers;
 public class DepartmentsController : ControllerBase
 {
     private readonly IDepartmentService _service;
+    private readonly IPermissionService _permissions;
 
-    public DepartmentsController(IDepartmentService service)
+    public DepartmentsController(IDepartmentService service, IPermissionService permissions)
     {
         _service = service;
+        _permissions = permissions;
     }
 
     [HttpGet]
-    [Authorize(Roles = $"{AppRoles.Developer},{AppRoles.HRManager},{AppRoles.HRAssistant}")]
+    [RequireSection(AppSections.Departments, AppSections.Tracking, AppSections.Employees, AppSections.Reports, AppSections.Shifts)]
     public async Task<ActionResult<IReadOnlyList<DepartmentDto>>> GetAll(
         [FromQuery] bool includeDeleted = false,
         [FromQuery] string? search = null)
     {
-        var canSeeDeleted = User.IsInRole(AppRoles.Developer);
+        var canSeeDeleted = await _permissions.HasAnyAsync(User.GetUserId(), AppSections.Departments);
         return Ok(await _service.GetAllAsync(canSeeDeleted && includeDeleted, search));
     }
 
     [HttpGet("{id:int}")]
-    [Authorize(Roles = $"{AppRoles.Developer},{AppRoles.HRManager},{AppRoles.HRAssistant}")]
+    [RequireSection(AppSections.Departments, AppSections.Tracking, AppSections.Employees, AppSections.Reports, AppSections.Shifts)]
     public async Task<ActionResult<DepartmentDto>> GetById(int id)
     {
         var item = await _service.GetByIdAsync(id);
         if (item is null) return NotFound(new ApiMessage("Department not found."));
-        if (item.IsDeleted && !User.IsInRole(AppRoles.Developer))
+        var canSeeDeleted = await _permissions.HasAnyAsync(User.GetUserId(), AppSections.Departments);
+        if (item.IsDeleted && !canSeeDeleted)
             return NotFound(new ApiMessage("Department not found."));
         return Ok(item);
     }
 
     [HttpPost]
-    [Authorize(Roles = AppRoles.Developer)]
+    [RequireSection(AppSections.Departments)]
     public async Task<ActionResult<DepartmentDto>> Create([FromBody] CreateDepartmentRequest request)
     {
         var (ok, error, data) = await _service.CreateAsync(request, User.GetUserId());
@@ -49,7 +53,7 @@ public class DepartmentsController : ControllerBase
     }
 
     [HttpPut("{id:int}")]
-    [Authorize(Roles = AppRoles.Developer)]
+    [RequireSection(AppSections.Departments)]
     public async Task<ActionResult<DepartmentDto>> Update(int id, [FromBody] UpdateDepartmentRequest request)
     {
         var (ok, error, data) = await _service.UpdateAsync(id, request, User.GetUserId());
@@ -58,7 +62,7 @@ public class DepartmentsController : ControllerBase
     }
 
     [HttpDelete("{id:int}")]
-    [Authorize(Roles = AppRoles.Developer)]
+    [RequireSection(AppSections.Departments)]
     public async Task<ActionResult<ApiMessage>> Delete(int id)
     {
         var (ok, error) = await _service.DeleteAsync(id, User.GetUserId());
@@ -67,7 +71,7 @@ public class DepartmentsController : ControllerBase
     }
 
     [HttpPost("{id:int}/recover")]
-    [Authorize(Roles = AppRoles.Developer)]
+    [RequireSection(AppSections.Departments)]
     public async Task<ActionResult<DepartmentDto>> Recover(int id)
     {
         var (ok, error, data) = await _service.RecoverAsync(id, User.GetUserId());

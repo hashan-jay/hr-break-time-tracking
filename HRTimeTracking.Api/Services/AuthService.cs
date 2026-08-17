@@ -70,17 +70,20 @@ public class AuthService : IAuthService
     private readonly SignInManager<ApplicationUser> _signInManager;
     private readonly IJwtTokenService _jwtTokenService;
     private readonly IAuditService _auditService;
+    private readonly IPermissionService _permissions;
 
     public AuthService(
         UserManager<ApplicationUser> userManager,
         SignInManager<ApplicationUser> signInManager,
         IJwtTokenService jwtTokenService,
-        IAuditService auditService)
+        IAuditService auditService,
+        IPermissionService permissions)
     {
         _userManager = userManager;
         _signInManager = signInManager;
         _jwtTokenService = jwtTokenService;
         _auditService = auditService;
+        _permissions = permissions;
     }
 
     public async Task<(bool Ok, string? Error, DTOs.LoginResponse? Response)> LoginAsync(string userName, string password)
@@ -94,6 +97,7 @@ public class AuthService : IAuthService
             return (false, "Invalid username or password.", null);
 
         var roles = await _userManager.GetRolesAsync(user);
+        var permissions = await _permissions.GetForUserAsync(user.Id);
         var (token, expiresAt) = _jwtTokenService.CreateToken(user, roles);
 
         user.LastLoginAt = DateTime.UtcNow;
@@ -108,7 +112,8 @@ public class AuthService : IAuthService
             roles.ToList(),
             user.IsActive,
             user.CreatedAt,
-            user.LastLoginAt);
+            user.LastLoginAt,
+            permissions);
 
         return (true, null, new DTOs.LoginResponse(token, expiresAt, dto));
     }
@@ -118,6 +123,7 @@ public class AuthService : IAuthService
         var user = await _userManager.FindByIdAsync(userId);
         if (user is null) return null;
         var roles = await _userManager.GetRolesAsync(user);
+        var permissions = await _permissions.GetForUserAsync(user.Id);
         return new DTOs.UserDto(
             user.Id,
             user.UserName ?? string.Empty,
@@ -126,6 +132,7 @@ public class AuthService : IAuthService
             roles.ToList(),
             user.IsActive,
             user.CreatedAt,
-            user.LastLoginAt);
+            user.LastLoginAt,
+            permissions);
     }
 }

@@ -3,6 +3,17 @@ import api from '../api/client';
 
 const AuthContext = createContext(null);
 
+export const SECTIONS = [
+  { key: 'dashboard', label: 'Dashboard' },
+  { key: 'tracking', label: 'Live Tracking' },
+  { key: 'employees', label: 'Employees' },
+  { key: 'departments', label: 'Departments' },
+  { key: 'shifts', label: 'Shifts' },
+  { key: 'reports', label: 'Reports' },
+  { key: 'settings', label: 'Settings' },
+  { key: 'audit', label: 'Audit Log' },
+];
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(() => {
     const raw = localStorage.getItem('hr_user');
@@ -58,6 +69,31 @@ export function AuthProvider({ children }) {
   };
 
   const roles = user?.roles || [];
+  const permissions = user?.permissions || [];
+  const isDeveloper = roles.includes('Developer');
+
+  const can = (section) => {
+    if (section === 'users') return isDeveloper;
+    if (isDeveloper) return true;
+    return permissions.includes(section);
+  };
+
+  const firstAllowedPath = () => {
+    const order = [
+      ['dashboard', '/app'],
+      ['tracking', '/app/tracking'],
+      ['employees', '/app/employees'],
+      ['departments', '/app/departments'],
+      ['shifts', '/app/shifts'],
+      ['reports', '/app/reports'],
+      ['settings', '/app/settings'],
+      ['audit', '/app/audit'],
+      ['users', '/app/users'],
+    ];
+    const hit = order.find(([key]) => can(key));
+    return hit ? hit[1] : '/';
+  };
+
   const value = useMemo(
     () => ({
       user,
@@ -66,14 +102,17 @@ export function AuthProvider({ children }) {
       login,
       logout,
       roles,
+      permissions,
+      can,
+      firstAllowedPath,
       isAuthenticated: !!token && !!user,
-      isDeveloper: roles.includes('Developer'),
+      isDeveloper,
       isHRManager: roles.includes('HRManager'),
       isHRAssistant: roles.includes('HRAssistant'),
-      canManageMasterData: roles.includes('Developer') || roles.includes('HRManager'),
-      canTrackBreaks: roles.includes('Developer') || roles.includes('HRManager') || roles.includes('HRAssistant'),
+      canManageMasterData: can('employees') || can('departments') || can('shifts'),
+      canTrackBreaks: can('tracking'),
     }),
-    [user, token, loading, roles],
+    [user, token, loading, roles, permissions, isDeveloper],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -273,7 +273,7 @@ export default function DashboardPage() {
               <p>Jump into the workflows you use most for today’s break tracking.</p>
             </div>
             <div className="portal-quick-grid">
-              {auth.canTrackBreaks && (
+              {auth.can('tracking') && (
                 <QuickLink
                   title="Live Tracking"
                   description="Watch who is out on break and toggle sessions in real time."
@@ -282,7 +282,7 @@ export default function DashboardPage() {
                   tone="amber"
                 />
               )}
-              {auth.canTrackBreaks && (
+              {auth.can('employees') && (
                 <QuickLink
                   title="Employees"
                   description="Maintain employee codes, departments, and active status."
@@ -291,7 +291,7 @@ export default function DashboardPage() {
                   tone="sky"
                 />
               )}
-              {auth.canManageMasterData && (
+              {auth.can('departments') && (
                 <QuickLink
                   title="Departments"
                   description="Organize teams and keep department master data current."
@@ -300,7 +300,7 @@ export default function DashboardPage() {
                   tone="violet"
                 />
               )}
-              {auth.canManageMasterData && (
+              {auth.can('shifts') && (
                 <QuickLink
                   title="Shifts"
                   description="Create and edit work shifts for employee assignment and reports."
@@ -309,14 +309,16 @@ export default function DashboardPage() {
                   tone="sky"
                 />
               )}
-              <QuickLink
-                title="Reports"
-                description="Generate A4 print-ready compliance reports and export CSV."
-                to="/app/reports"
-                cta="Open reports"
-                tone="emerald"
-              />
-              {auth.isDeveloper && (
+              {auth.can('reports') && (
+                <QuickLink
+                  title="Reports"
+                  description="Generate A4 print-ready compliance reports and export CSV."
+                  to="/app/reports"
+                  cta="Open reports"
+                  tone="emerald"
+                />
+              )}
+              {auth.can('users') && (
                 <QuickLink
                   title="Users & settings"
                   description="Control staff accounts, daily limits, and audit history."

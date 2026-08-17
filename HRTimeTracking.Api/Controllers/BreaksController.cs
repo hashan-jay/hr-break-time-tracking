@@ -1,3 +1,4 @@
+using HRTimeTracking.Api.Authorization;
 using HRTimeTracking.Api.DTOs;
 using HRTimeTracking.Api.Models;
 using HRTimeTracking.Api.Services;
@@ -19,7 +20,7 @@ public class BreaksController : ControllerBase
     }
 
     [HttpGet("live")]
-    [Authorize(Roles = $"{AppRoles.Developer},{AppRoles.HRManager},{AppRoles.HRAssistant}")]
+    [RequireSection(AppSections.Tracking)]
     public async Task<ActionResult<LiveBoardDto>> Live(
         [FromQuery] string? search = null,
         [FromQuery] int? departmentId = null,
@@ -28,7 +29,7 @@ public class BreaksController : ControllerBase
         => Ok(await _service.GetLiveBoardAsync(search, departmentId, shiftId, shiftId2));
 
     [HttpGet("employee/{employeeId:int}/status")]
-    [Authorize(Roles = $"{AppRoles.Developer},{AppRoles.HRManager},{AppRoles.HRAssistant}")]
+    [RequireSection(AppSections.Tracking)]
     public async Task<ActionResult<EmployeeBreakStatusDto>> Status(int employeeId)
     {
         var status = await _service.GetEmployeeStatusAsync(employeeId);
@@ -36,7 +37,7 @@ public class BreaksController : ControllerBase
     }
 
     [HttpGet("sessions")]
-    [Authorize(Roles = $"{AppRoles.Developer},{AppRoles.HRManager},{AppRoles.HRAssistant}")]
+    [RequireSection(AppSections.Tracking, AppSections.Reports)]
     public async Task<ActionResult<IReadOnlyList<BreakSessionDto>>> Sessions(
         [FromQuery] string? from = null,
         [FromQuery] string? to = null,
@@ -50,7 +51,7 @@ public class BreaksController : ControllerBase
     }
 
     [HttpPost("toggle")]
-    [Authorize(Roles = $"{AppRoles.Developer},{AppRoles.HRManager},{AppRoles.HRAssistant}")]
+    [RequireSection(AppSections.Tracking)]
     public async Task<ActionResult<EmployeeBreakStatusDto>> Toggle([FromBody] ToggleBreakRequest request)
     {
         var (ok, error, data) = await _service.ToggleAsync(request.EmployeeId, request.BreakType, User.GetUserId());
@@ -59,7 +60,7 @@ public class BreaksController : ControllerBase
     }
 
     [HttpPost("out")]
-    [Authorize(Roles = $"{AppRoles.Developer},{AppRoles.HRManager},{AppRoles.HRAssistant}")]
+    [RequireSection(AppSections.Tracking)]
     public async Task<ActionResult<EmployeeBreakStatusDto>> Out([FromBody] ToggleBreakRequest request)
     {
         var (ok, error, data) = await _service.RecordOutAsync(request.EmployeeId, request.BreakType, User.GetUserId());
@@ -68,7 +69,7 @@ public class BreaksController : ControllerBase
     }
 
     [HttpPost("in")]
-    [Authorize(Roles = $"{AppRoles.Developer},{AppRoles.HRManager},{AppRoles.HRAssistant}")]
+    [RequireSection(AppSections.Tracking)]
     public async Task<ActionResult<EmployeeBreakStatusDto>> In([FromBody] ToggleBreakRequest request)
     {
         var (ok, error, data) = await _service.RecordInAsync(request.EmployeeId, request.BreakType, User.GetUserId());

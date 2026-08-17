@@ -15,12 +15,15 @@ import AuditPage from './pages/AuditPage';
 import { LoadingBlock } from './components/UiBits';
 import './App.css';
 
-function ProtectedRoute({ allow }) {
-  const { isAuthenticated, loading, roles } = useAuth();
+function ProtectedRoute({ allow, allowSections }) {
+  const { isAuthenticated, loading, roles, can, firstAllowedPath } = useAuth();
   if (loading) return <LoadingBlock label="Checking session…" />;
   if (!isAuthenticated) return <Navigate to="/login" replace />;
   if (allow && !allow.some((role) => roles.includes(role))) {
-    return <Navigate to="/app" replace />;
+    return <Navigate to={firstAllowedPath()} replace />;
+  }
+  if (allowSections && !allowSections.some((section) => can(section))) {
+    return <Navigate to={firstAllowedPath()} replace />;
   }
   return <Outlet />;
 }
@@ -32,19 +35,31 @@ function AppRoutes() {
 
       <Route element={<ProtectedRoute />}>
         <Route path="/app" element={<AppLayout />}>
-          <Route index element={<DashboardPage />} />
-          <Route element={<ProtectedRoute allow={['Developer', 'HRManager', 'HRAssistant']} />}>
+          <Route element={<ProtectedRoute allowSections={['dashboard']} />}>
+            <Route index element={<DashboardPage />} />
+          </Route>
+          <Route element={<ProtectedRoute allowSections={['tracking']} />}>
             <Route path="tracking" element={<TrackingPage />} />
+          </Route>
+          <Route element={<ProtectedRoute allowSections={['reports']} />}>
             <Route path="reports" element={<ReportsPage />} />
+          </Route>
+          <Route element={<ProtectedRoute allowSections={['employees']} />}>
             <Route path="employees" element={<EmployeesPage />} />
           </Route>
-          <Route element={<ProtectedRoute allow={['Developer', 'HRManager']} />}>
+          <Route element={<ProtectedRoute allowSections={['departments']} />}>
             <Route path="departments" element={<DepartmentsPage />} />
+          </Route>
+          <Route element={<ProtectedRoute allowSections={['shifts']} />}>
             <Route path="shifts" element={<ShiftsPage />} />
           </Route>
           <Route element={<ProtectedRoute allow={['Developer']} />}>
             <Route path="users" element={<UsersPage />} />
+          </Route>
+          <Route element={<ProtectedRoute allowSections={['settings']} />}>
             <Route path="settings" element={<SettingsPage />} />
+          </Route>
+          <Route element={<ProtectedRoute allowSections={['audit']} />}>
             <Route path="audit" element={<AuditPage />} />
           </Route>
         </Route>

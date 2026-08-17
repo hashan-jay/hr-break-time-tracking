@@ -132,7 +132,7 @@ function StaffSidebar({ user, items, onLogout, onNavigate }) {
 }
 
 export default function AppLayout() {
-  const { user, logout, isDeveloper, canManageMasterData, canTrackBreaks } = useAuth();
+  const { user, logout, can } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -148,15 +148,15 @@ export default function AppLayout() {
 
   const items = [
     { to: '/', end: true, label: 'Employee portal', icon: ICONS.portal },
-    { to: '/app', end: true, label: 'Dashboard', icon: ICONS.dashboard },
-    canTrackBreaks && { to: '/app/tracking', label: 'Live Tracking', icon: ICONS.tracking },
-    canTrackBreaks && { to: '/app/employees', label: 'Employees', icon: ICONS.employees },
-    canManageMasterData && { to: '/app/departments', label: 'Departments', icon: ICONS.departments },
-    canManageMasterData && { to: '/app/shifts', label: 'Shifts', icon: ICONS.shifts },
-    { to: '/app/reports', label: 'Reports', icon: ICONS.reports },
-    isDeveloper && { to: '/app/users', label: 'Users', icon: ICONS.users },
-    isDeveloper && { to: '/app/settings', label: 'Settings', icon: ICONS.settings },
-    isDeveloper && { to: '/app/audit', label: 'Audit Log', icon: ICONS.audit },
+    can('dashboard') && { to: '/app', end: true, label: 'Dashboard', icon: ICONS.dashboard },
+    can('tracking') && { to: '/app/tracking', label: 'Live Tracking', icon: ICONS.tracking },
+    can('employees') && { to: '/app/employees', label: 'Employees', icon: ICONS.employees },
+    can('departments') && { to: '/app/departments', label: 'Departments', icon: ICONS.departments },
+    can('shifts') && { to: '/app/shifts', label: 'Shifts', icon: ICONS.shifts },
+    can('reports') && { to: '/app/reports', label: 'Reports', icon: ICONS.reports },
+    can('users') && { to: '/app/users', label: 'Users', icon: ICONS.users },
+    can('settings') && { to: '/app/settings', label: 'Settings', icon: ICONS.settings },
+    can('audit') && { to: '/app/audit', label: 'Audit Log', icon: ICONS.audit },
   ].filter(Boolean);
 
   return (

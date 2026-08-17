@@ -1,3 +1,4 @@
+using HRTimeTracking.Api.Authorization;
 using HRTimeTracking.Api.Data;
 using HRTimeTracking.Api.DTOs;
 using HRTimeTracking.Api.Models;
@@ -14,10 +15,12 @@ namespace HRTimeTracking.Api.Controllers;
 public class UsersController : ControllerBase
 {
     private readonly IUserAdminService _service;
+    private readonly IPermissionService _permissions;
 
-    public UsersController(IUserAdminService service)
+    public UsersController(IUserAdminService service, IPermissionService permissions)
     {
         _service = service;
+        _permissions = permissions;
     }
 
     [HttpGet]
@@ -40,6 +43,16 @@ public class UsersController : ControllerBase
         return Ok(data);
     }
 
+    [HttpPut("{id}/permissions")]
+    public async Task<ActionResult<IReadOnlyList<string>>> UpdatePermissions(
+        string id, [FromBody] UpdateSectionsRequest request)
+    {
+        var (ok, error, data) = await _permissions.UpdateUserPermissionsAsync(
+            id, request.Sections ?? [], User.GetUserId());
+        if (!ok || data is null) return BadRequest(new ApiMessage(error ?? "Update failed."));
+        return Ok(data);
+    }
+
     [HttpPost("{id}/password")]
     public async Task<ActionResult<ApiMessage>> ChangePassword(string id, [FromBody] ChangePasswordRequest request)
     {
@@ -58,8 +71,39 @@ public class UsersController : ControllerBase
 }
 
 [ApiController]
-[Route("api/[controller]")]
+[Route("api/permissions")]
 [Authorize(Roles = AppRoles.Developer)]
+public class PermissionsController : ControllerBase
+{
+    private readonly IPermissionService _permissions;
+
+    public PermissionsController(IPermissionService permissions)
+    {
+        _permissions = permissions;
+    }
+
+    [HttpGet("catalog")]
+    public ActionResult<IReadOnlyList<SectionCatalogItem>> Catalog()
+        => Ok(AppSections.Catalog.Select(x => new SectionCatalogItem(x.Key, x.Label)).ToList());
+
+    [HttpGet("roles")]
+    public async Task<ActionResult<IReadOnlyList<RoleAccessDto>>> Roles()
+        => Ok(await _permissions.GetRoleDefaultsAsync());
+
+    [HttpPut("roles/{roleName}")]
+    public async Task<ActionResult<RoleAccessDto>> UpdateRole(string roleName, [FromBody] UpdateSectionsRequest request)
+    {
+        var (ok, error, data) = await _permissions.UpdateRoleDefaultsAsync(
+            roleName, request.Sections ?? [], User.GetUserId());
+        if (!ok || data is null) return BadRequest(new ApiMessage(error ?? "Update failed."));
+        return Ok(data);
+    }
+}
+
+[ApiController]
+[Route("api/[controller]")]
+[Authorize]
+[RequireSection(AppSections.Settings)]
 public class SettingsController : ControllerBase
 {
     private readonly ISettingsService _service;
@@ -100,7 +144,8 @@ public class SettingsController : ControllerBase
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize(Roles = AppRoles.Developer)]
+[Authorize]
+[RequireSection(AppSections.Audit)]
 public class AuditController : ControllerBase
 {
     private readonly AppDbContext _db;

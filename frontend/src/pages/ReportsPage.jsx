@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import api, { apiErrorMessage } from '../api/client';
 import { MessageBar, StatusBadge } from '../components/UiBits';
-import { useAuth } from '../auth/AuthContext';
 import BreakReportDocument, { renderBreakReportHtml } from '../components/BreakReportDocument';
 import { downloadHtmlReport } from '../lib/downloadReport';
 
@@ -25,7 +24,6 @@ function queryId(value) {
 }
 
 export default function ReportsPage() {
-  const { isHRAssistant, canManageMasterData } = useAuth();
   const [from, setFrom] = useState(todayIso());
   const [to, setTo] = useState(todayIso());
   const [departmentId, setDepartmentId] = useState('');
@@ -75,8 +73,7 @@ export default function ReportsPage() {
     event?.preventDefault?.();
     setBusy(true);
     try {
-      const endpoint = isHRAssistant && !canManageMasterData ? '/reports/breaks/view' : '/reports/breaks';
-      const { data } = await api.get(endpoint, {
+      const { data } = await api.get('/reports/breaks', {
         params: {
           from,
           to: to || from,

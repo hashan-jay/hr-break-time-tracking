@@ -1,5 +1,6 @@
 using HRTimeTracking.Api.Data;
 using HRTimeTracking.Api.Models;
+using HRTimeTracking.Api.Services;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
@@ -176,6 +177,9 @@ public static class DbSeeder
             );
             await db.SaveChangesAsync();
         }
+
+        var permissions = sp.GetRequiredService<IPermissionService>();
+        await permissions.SeedMissingAsync();
     }
 
     private static async Task EnsureUserAsync(

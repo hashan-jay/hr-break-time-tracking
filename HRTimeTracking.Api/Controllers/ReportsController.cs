@@ -1,3 +1,4 @@
+using HRTimeTracking.Api.Authorization;
 using HRTimeTracking.Api.DTOs;
 using HRTimeTracking.Api.Models;
 using HRTimeTracking.Api.Services;
@@ -19,14 +20,14 @@ public class ReportsController : ControllerBase
     }
 
     [HttpGet("dashboard")]
-    [Authorize(Roles = $"{AppRoles.Developer},{AppRoles.HRManager},{AppRoles.HRAssistant}")]
+    [RequireSection(AppSections.Dashboard)]
     public async Task<ActionResult<DashboardDto>> Dashboard()
     {
         return Ok(await _reportService.GetDashboardAsync());
     }
 
     [HttpGet("breaks")]
-    [Authorize(Roles = $"{AppRoles.Developer},{AppRoles.HRManager}")]
+    [RequireSection(AppSections.Reports)]
     public async Task<ActionResult<ReportSummaryDto>> Breaks(
         [FromQuery] string? from = null,
         [FromQuery] string? to = null,
@@ -45,7 +46,7 @@ public class ReportsController : ControllerBase
 
     /// <summary>HR Assistant can view/search break data (read-only reports for viewing).</summary>
     [HttpGet("breaks/view")]
-    [Authorize(Roles = $"{AppRoles.Developer},{AppRoles.HRManager},{AppRoles.HRAssistant}")]
+    [RequireSection(AppSections.Reports)]
     public async Task<ActionResult<ReportSummaryDto>> BreaksView(
         [FromQuery] string? from = null,
         [FromQuery] string? to = null,

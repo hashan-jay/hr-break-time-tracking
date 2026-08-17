@@ -20,25 +20,30 @@ public class UserAdminService : IUserAdminService
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly RoleManager<IdentityRole> _roleManager;
     private readonly IAuditService _audit;
+    private readonly IPermissionService _permissions;
 
     public UserAdminService(
         UserManager<ApplicationUser> userManager,
         RoleManager<IdentityRole> roleManager,
-        IAuditService audit)
+        IAuditService audit,
+        IPermissionService permissions)
     {
         _userManager = userManager;
         _roleManager = roleManager;
         _audit = audit;
+        _permissions = permissions;
     }
 
     public async Task<IReadOnlyList<UserDto>> GetAllAsync()
     {
         var users = await _userManager.Users.OrderBy(u => u.UserName).ToListAsync();
+        var permMap = await _permissions.GetForUsersAsync(users.Select(u => u.Id));
         var result = new List<UserDto>();
         foreach (var user in users)
         {
             var roles = await _userManager.GetRolesAsync(user);
-            result.Add(Map(user, roles));
+            permMap.TryGetValue(user.Id, out var perms);
+            result.Add(Map(user, roles, perms ?? []));
         }
         return result;
     }
@@ -70,8 +75,10 @@ public class UserAdminService : IUserAdminService
             return (false, string.Join(" ", roleResult.Errors.Select(e => e.Description)), null);
 
         await _audit.LogAsync(actorUserId, "Create", "User", user.Id, $"Created user '{user.UserName}' with role {request.Role}.");
+        await _permissions.ApplyRoleDefaultsToUserAsync(user.Id, request.Role);
         var roles = await _userManager.GetRolesAsync(user);
-        return (true, null, Map(user, roles));
+        var perms = await _permissions.GetForUserAsync(user.Id);
+        return (true, null, Map(user, roles, perms));
     }
 
     public async Task<(bool Ok, string? Error, UserDto? Data)> UpdateAsync(string id, UpdateUserRequest request, string? actorUserId)
@@ -90,12 +97,17 @@ public class UserAdminService : IUserAdminService
             return (false, string.Join(" ", update.Errors.Select(e => e.Description)), null);
 
         var currentRoles = await _userManager.GetRolesAsync(user);
+        var roleChanged = !currentRoles.Contains(request.Role);
         await _userManager.RemoveFromRolesAsync(user, currentRoles);
         await _userManager.AddToRoleAsync(user, request.Role);
 
+        if (roleChanged)
+            await _permissions.ApplyRoleDefaultsToUserAsync(user.Id, request.Role);
+
         await _audit.LogAsync(actorUserId, "Update", "User", user.Id, $"Updated user '{user.UserName}'.");
         var roles = await _userManager.GetRolesAsync(user);
-        return (true, null, Map(user, roles));
+        var perms = await _permissions.GetForUserAsync(user.Id);
+        return (true, null, Map(user, roles, perms));
     }
 
     public async Task<(bool Ok, string? Error)> ChangePasswordAsync(string id, string newPassword, string? actorUserId)
@@ -124,7 +136,7 @@ public class UserAdminService : IUserAdminService
         return (true, null);
     }
 
-    private static UserDto Map(ApplicationUser user, IList<string> roles) => new(
+    private static UserDto Map(ApplicationUser user, IList<string> roles, IReadOnlyList<string> permissions) => new(
         user.Id,
         user.UserName ?? string.Empty,
         user.Email ?? string.Empty,
@@ -132,7 +144,8 @@ public class UserAdminService : IUserAdminService
         roles.ToList(),
         user.IsActive,
         user.CreatedAt,
-        user.LastLoginAt);
+        user.LastLoginAt,
+        permissions);
 }
 
 public interface ISettingsService

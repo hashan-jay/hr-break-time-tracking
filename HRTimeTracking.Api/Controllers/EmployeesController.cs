@@ -1,3 +1,4 @@
+using HRTimeTracking.Api.Authorization;
 using HRTimeTracking.Api.DTOs;
 using HRTimeTracking.Api.Models;
 using HRTimeTracking.Api.Services;
@@ -19,7 +20,7 @@ public class EmployeesController : ControllerBase
     }
 
     [HttpGet]
-    [Authorize(Roles = $"{AppRoles.Developer},{AppRoles.HRManager},{AppRoles.HRAssistant}")]
+    [RequireSection(AppSections.Employees, AppSections.Tracking, AppSections.Reports)]
     public async Task<ActionResult<IReadOnlyList<EmployeeDto>>> GetAll(
         [FromQuery] string? search = null,
         [FromQuery] int? departmentId = null)
@@ -28,7 +29,7 @@ public class EmployeesController : ControllerBase
     }
 
     [HttpGet("{id:int}")]
-    [Authorize(Roles = $"{AppRoles.Developer},{AppRoles.HRManager},{AppRoles.HRAssistant}")]
+    [RequireSection(AppSections.Employees, AppSections.Tracking, AppSections.Reports)]
     public async Task<ActionResult<EmployeeDto>> GetById(int id)
     {
         var item = await _service.GetByIdAsync(id);
@@ -37,7 +38,7 @@ public class EmployeesController : ControllerBase
     }
 
     [HttpPost]
-    [Authorize(Roles = $"{AppRoles.Developer},{AppRoles.HRManager}")]
+    [RequireSection(AppSections.Employees)]
     public async Task<ActionResult<EmployeeDto>> Create([FromBody] CreateEmployeeRequest request)
     {
         var (ok, error, data) = await _service.CreateAsync(request, User.GetUserId());
@@ -46,7 +47,7 @@ public class EmployeesController : ControllerBase
     }
 
     [HttpPut("{id:int}")]
-    [Authorize(Roles = $"{AppRoles.Developer},{AppRoles.HRManager}")]
+    [RequireSection(AppSections.Employees)]
     public async Task<ActionResult<EmployeeDto>> Update(int id, [FromBody] UpdateEmployeeRequest request)
     {
         var (ok, error, data) = await _service.UpdateAsync(id, request, User.GetUserId());
@@ -55,7 +56,7 @@ public class EmployeesController : ControllerBase
     }
 
     [HttpDelete("{id:int}")]
-    [Authorize(Roles = $"{AppRoles.Developer},{AppRoles.HRManager},{AppRoles.HRAssistant}")]
+    [RequireSection(AppSections.Employees)]
     public async Task<ActionResult<ApiMessage>> Delete(int id)
     {
         var (ok, error) = await _service.DeleteAsync(id, User.GetUserId());

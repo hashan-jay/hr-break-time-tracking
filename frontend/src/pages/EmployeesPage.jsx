@@ -11,7 +11,8 @@ const emptyForm = {
 };
 
 export default function EmployeesPage() {
-  const { canManageMasterData } = useAuth();
+  const { can } = useAuth();
+  const canEdit = can('employees');
   const [employees, setEmployees] = useState([]);
   const [departments, setDepartments] = useState([]);
   const [shifts, setShifts] = useState([]);
@@ -46,7 +47,7 @@ export default function EmployeesPage() {
 
   const onSubmit = async (e) => {
     e.preventDefault();
-    if (!canManageMasterData) return;
+    if (!canEdit) return;
     try {
       const shiftId = form.shiftId ? Number(form.shiftId) : null;
       const payload = {
@@ -78,7 +79,7 @@ export default function EmployeesPage() {
   };
 
   const startEdit = (emp) => {
-    if (!canManageMasterData) return;
+    if (!canEdit) return;
     setEditingId(emp.id);
     setForm({
       employeeCode: emp.employeeCode,
@@ -119,7 +120,7 @@ export default function EmployeesPage() {
       <MessageBar message={message} type={msgType} onClose={() => setMessage('')} />
 
       <div className="split-forms">
-        {canManageMasterData && (
+        {canEdit && (
           <form className="card-form" onSubmit={onSubmit}>
             <h2>{editingId ? 'Edit employee' : 'Add employee'}</h2>
             {!editingId && (
@@ -191,10 +192,12 @@ export default function EmployeesPage() {
                     <td>{e.departmentName}</td>
                     <td>{e.shiftDisplay || e.shiftName || '—'}</td>
                     <td className="row-actions">
-                      {canManageMasterData && (
+                      {canEdit && (
                         <button type="button" className="btn link-btn" onClick={() => startEdit(e)}>Edit</button>
                       )}
+                      {canEdit && (
                       <button type="button" className="btn link-btn danger" onClick={() => remove(e.id)}>Delete</button>
+                      )}
                     </td>
                   </tr>
                 ))}

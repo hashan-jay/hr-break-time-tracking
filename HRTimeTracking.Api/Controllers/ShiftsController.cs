@@ -1,3 +1,4 @@
+using HRTimeTracking.Api.Authorization;
 using HRTimeTracking.Api.DTOs;
 using HRTimeTracking.Api.Models;
 using HRTimeTracking.Api.Services;
@@ -12,25 +13,25 @@ namespace HRTimeTracking.Api.Controllers;
 public class ShiftsController : ControllerBase
 {
     private readonly IShiftService _service;
+    private readonly IPermissionService _permissions;
 
-    public ShiftsController(IShiftService service)
+    public ShiftsController(IShiftService service, IPermissionService permissions)
     {
         _service = service;
+        _permissions = permissions;
     }
 
-    /// <summary>List shifts for dropdowns and shift admin UI (HR Manager / Developer / HR Assistant).</summary>
     [HttpGet]
-    [Authorize(Roles = $"{AppRoles.Developer},{AppRoles.HRManager},{AppRoles.HRAssistant}")]
+    [RequireSection(AppSections.Shifts, AppSections.Tracking, AppSections.Employees, AppSections.Reports)]
     public async Task<ActionResult<IReadOnlyList<ShiftDto>>> GetAll([FromQuery] bool includeInactive = false)
     {
-        // Developer and HR Manager can manage inactive shifts in the Shifts UI.
-        if (includeInactive && !(User.IsInRole(AppRoles.Developer) || User.IsInRole(AppRoles.HRManager)))
+        if (includeInactive && !await _permissions.HasAnyAsync(User.GetUserId(), AppSections.Shifts))
             includeInactive = false;
         return Ok(await _service.GetAllAsync(includeInactive));
     }
 
     [HttpGet("{id:int}")]
-    [Authorize(Roles = $"{AppRoles.Developer},{AppRoles.HRManager},{AppRoles.HRAssistant}")]
+    [RequireSection(AppSections.Shifts, AppSections.Tracking, AppSections.Employees, AppSections.Reports)]
     public async Task<ActionResult<ShiftDto>> GetById(int id)
     {
         var item = await _service.GetByIdAsync(id);
@@ -38,7 +39,7 @@ public class ShiftsController : ControllerBase
     }
 
     [HttpPost]
-    [Authorize(Roles = $"{AppRoles.Developer},{AppRoles.HRManager}")]
+    [RequireSection(AppSections.Shifts)]
     public async Task<ActionResult<ShiftDto>> Create([FromBody] CreateShiftRequest request)
     {
         var (ok, error, data) = await _service.CreateAsync(request, User.GetUserId());
@@ -47,7 +48,7 @@ public class ShiftsController : ControllerBase
     }
 
     [HttpPut("{id:int}")]
-    [Authorize(Roles = $"{AppRoles.Developer},{AppRoles.HRManager}")]
+    [RequireSection(AppSections.Shifts)]
     public async Task<ActionResult<ShiftDto>> Update(int id, [FromBody] UpdateShiftRequest request)
     {
         var (ok, error, data) = await _service.UpdateAsync(id, request, User.GetUserId());
@@ -56,7 +57,7 @@ public class ShiftsController : ControllerBase
     }
 
     [HttpPost("{id:int}/deactivate")]
-    [Authorize(Roles = $"{AppRoles.Developer},{AppRoles.HRManager}")]
+    [RequireSection(AppSections.Shifts)]
     public async Task<ActionResult> Deactivate(int id)
     {
         var (ok, error) = await _service.DeactivateAsync(id, User.GetUserId());
