@@ -1413,8 +1413,10 @@ tbody tr.start-limit-reached.selected {
   background: #fff;
 }
 
-.btn-out { background: #b7791f; color: #fff; }
-.btn-in { background: var(--teal); color: #fff; }
+.btn-out { background: #2e9b57; color: #fff; }
+.btn-out:hover:not(:disabled) { background: #25854a; }
+.btn-in { background: var(--red); color: #fff; }
+.btn-in:hover:not(:disabled) { background: #912018; }
 .btn-xl { width: 100%; padding: 1rem 1.1rem; font-size: 1.05rem; }
 
 .stats-grid {
