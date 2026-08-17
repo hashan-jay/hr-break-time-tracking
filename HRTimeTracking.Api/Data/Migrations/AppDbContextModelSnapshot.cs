@@ -178,6 +178,10 @@ namespace HRTimeTracking.Api.Data.Migrations
                     b.Property<DateTime?>("InTime")
                         .HasColumnType("datetime2");
 
+                    b.Property<bool>("IsAutoClosed")
+                        .HasDefaultValue(false)
+                        .HasColumnType("bit");
+
                     b.Property<DateTime>("OutTime")
                         .HasColumnType("datetime2");
 

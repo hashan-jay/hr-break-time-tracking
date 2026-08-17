@@ -122,6 +122,30 @@ public static class ShiftWindow
         return new ShiftPeriod(start, end);
     }
 
+    /// <summary>
+    /// When a forgotten open break must stop: the end of the shift period it
+    /// was started in. Overnight windows use the next-morning end time.
+    /// </summary>
+    public static DateTime? AutoCloseAt(Shift? shift, DateOnly breakDate, DateTime outTime)
+    {
+        outTime = TimeDisplay.AsLocal(outTime);
+        if (shift is not null)
+        {
+            var period = StartingOn(shift, breakDate);
+            if (outTime < period.End)
+                return period.End;
+
+            var atOut = ActiveAt(shift, outTime);
+            if (atOut.HasValue && outTime < atOut.Value.End)
+                return atOut.Value.End;
+
+            return null;
+        }
+
+        var day = CalendarDay(outTime);
+        return outTime < day.End ? day.End : null;
+    }
+
     public static bool StartedIn(DateTime outTime, ShiftPeriod period)
     {
         var local = TimeDisplay.AsLocal(outTime);

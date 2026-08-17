@@ -79,6 +79,14 @@ public static class SchemaEnsure
             """);
 
         await db.Database.ExecuteSqlRawAsync("""
+            IF COL_LENGTH('dbo.BreakSessions', 'IsAutoClosed') IS NULL
+            BEGIN
+                ALTER TABLE dbo.BreakSessions ADD IsAutoClosed bit NOT NULL
+                    CONSTRAINT DF_BreakSessions_IsAutoClosed DEFAULT (0);
+            END
+            """);
+
+        await db.Database.ExecuteSqlRawAsync("""
             IF COL_LENGTH('dbo.BreakSessions', 'BreakType') IS NOT NULL
                AND NOT EXISTS (
                     SELECT 1 FROM sys.indexes

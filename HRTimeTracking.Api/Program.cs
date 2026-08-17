@@ -135,9 +135,11 @@ builder.Services.AddScoped<IEmployeeService, EmployeeService>();
 builder.Services.AddScoped<IShiftService, ShiftService>();
 builder.Services.AddScoped<ISettingsService, SettingsService>();
 builder.Services.AddScoped<IPermissionService, PermissionService>();
+builder.Services.AddScoped<IBreakAutoCloseService, BreakAutoCloseService>();
 builder.Services.AddScoped<IBreakTrackingService, BreakTrackingService>();
 builder.Services.AddScoped<IReportService, ReportService>();
 builder.Services.AddScoped<IUserAdminService, UserAdminService>();
+builder.Services.AddHostedService<BreakAutoCloseHostedService>();
 
 var app = builder.Build();
 

@@ -34,10 +34,20 @@ export function formatLocalClock(value) {
   });
 }
 
-export function liveElapsedSeconds(outTime, nowMs) {
+export function liveElapsedSeconds(outTime, nowMs, periodEnd) {
   const out = parseLocalDateTime(outTime);
   if (!out) return 0;
-  return Math.max(0, Math.floor((nowMs - out.getTime()) / 1000));
+  let endMs = nowMs;
+  const cap = parseLocalDateTime(periodEnd);
+  if (cap) endMs = Math.min(endMs, cap.getTime());
+  return Math.max(0, Math.floor((endMs - out.getTime()) / 1000));
+}
+
+export function isOpenBreakLive(employee, nowMs) {
+  if (!employee?.isOnBreak || !employee?.currentOutTime) return false;
+  const cap = parseLocalDateTime(employee.shiftPeriodEnd);
+  if (cap && nowMs >= cap.getTime()) return false;
+  return true;
 }
 
 export function statusFromTotal(totalSeconds, limitMinutes) {
@@ -58,7 +68,7 @@ export function shiftTotalSeconds(employee, breakType, nowMs) {
     ? (employee.mealClosedSeconds ?? Math.max(0, (employee.mealBreakSecondsToday || 0) - (employee.currentBreakElapsedSeconds || 0)))
     : (employee.comfortClosedSeconds ?? Math.max(0, (employee.comfortBreakSecondsToday || 0) - (employee.currentBreakElapsedSeconds || 0)));
   const onThisBreak = employee.isOnBreak && employee.currentBreakType === breakType;
-  const open = onThisBreak ? liveElapsedSeconds(employee.currentOutTime, nowMs) : 0;
+  const open = onThisBreak ? liveElapsedSeconds(employee.currentOutTime, nowMs, employee.shiftPeriodEnd) : 0;
   return Math.max(0, closed + open);
 }
 
@@ -69,10 +79,15 @@ export function enrichEmployeesLive(list, nowMs, limits = {}) {
     const comfortTotal = shiftTotalSeconds(e, BREAK_TYPES.COMFORT, nowMs);
     const mealStatus = statusFromTotal(mealTotal, limits.mealLimitMinutes);
     const comfortStatus = statusFromTotal(comfortTotal, limits.comfortLimitMinutes);
-    const onBreak = Boolean(e.isOnBreak && e.currentOutTime);
+    const live = isOpenBreakLive(e, nowMs);
     return {
       ...e,
-      currentBreakElapsedSeconds: onBreak ? liveElapsedSeconds(e.currentOutTime, nowMs) : 0,
+      isOnBreak: live,
+      currentBreakType: live ? e.currentBreakType : null,
+      currentOutTime: live ? e.currentOutTime : null,
+      currentBreakElapsedSeconds: live
+        ? liveElapsedSeconds(e.currentOutTime, nowMs, e.shiftPeriodEnd)
+        : 0,
       mealBreakSecondsToday: mealTotal,
       mealBreakDisplay: formatElapsed(mealTotal),
       mealStatus: mealStatus.status,

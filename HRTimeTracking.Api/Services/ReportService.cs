@@ -16,12 +16,18 @@ public class ReportService : IReportService
     private readonly AppDbContext _db;
     private readonly IBreakTrackingService _breakTracking;
     private readonly ISettingsService _settings;
+    private readonly IBreakAutoCloseService _autoClose;
 
-    public ReportService(AppDbContext db, IBreakTrackingService breakTracking, ISettingsService settings)
+    public ReportService(
+        AppDbContext db,
+        IBreakTrackingService breakTracking,
+        ISettingsService settings,
+        IBreakAutoCloseService autoClose)
     {
         _db = db;
         _breakTracking = breakTracking;
         _settings = settings;
+        _autoClose = autoClose;
     }
 
     public async Task<DashboardDto> GetDashboardAsync()
@@ -48,6 +54,7 @@ public class ReportService : IReportService
 
     public async Task<ReportSummaryDto> GetReportAsync(DateOnly from, DateOnly to, int? departmentId, int? employeeId, int? shiftId)
     {
+        await _autoClose.CloseExpiredAsync();
         if (to < from) (from, to) = (to, from);
         var comfortLimit = await _settings.GetComfortLimitMinutesAsync();
         var mealLimit = await _settings.GetMealLimitMinutesAsync();

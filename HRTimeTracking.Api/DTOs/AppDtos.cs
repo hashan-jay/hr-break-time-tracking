@@ -128,7 +128,8 @@ public record BreakSessionDto(
     int? DurationSeconds,
     string? DurationDisplay,
     DateOnly BreakDate,
-    bool IsOpen);
+    bool IsOpen,
+    bool IsAutoClosed = false);
 
 public record EmployeeBreakStatusDto(
     int EmployeeId,
@@ -159,7 +160,8 @@ public record EmployeeBreakStatusDto(
     int ComfortStartCountToday = 0,
     int MealStartCountToday = 0,
     int ComfortStartLimit = BreakStatusCodes.DefaultComfortStartLimit,
-    int MealStartLimit = BreakStatusCodes.DefaultMealStartLimit)
+    int MealStartLimit = BreakStatusCodes.DefaultMealStartLimit,
+    DateTime? ShiftPeriodEnd = null)
 {
     public bool IsOnComfortBreak => IsOnBreak && CurrentBreakType == BreakTypes.Comfort;
     public bool IsOnMealBreak => IsOnBreak && CurrentBreakType == BreakTypes.Meal;

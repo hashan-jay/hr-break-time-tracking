@@ -20,16 +20,23 @@ public class BreakTrackingService : IBreakTrackingService
     private readonly AppDbContext _db;
     private readonly IAuditService _audit;
     private readonly ISettingsService _settings;
+    private readonly IBreakAutoCloseService _autoClose;
 
-    public BreakTrackingService(AppDbContext db, IAuditService audit, ISettingsService settings)
+    public BreakTrackingService(
+        AppDbContext db,
+        IAuditService audit,
+        ISettingsService settings,
+        IBreakAutoCloseService autoClose)
     {
         _db = db;
         _audit = audit;
         _settings = settings;
+        _autoClose = autoClose;
     }
 
     public async Task<LiveBoardDto> GetLiveBoardAsync(string? search = null, int? departmentId = null, int? shiftId = null, int? shiftId2 = null)
     {
+        await _autoClose.CloseExpiredAsync();
         var today = TimeDisplay.TodayLocal();
         var now = TimeDisplay.NowLocal();
         var comfortLimit = await _settings.GetComfortLimitMinutesAsync();
@@ -138,6 +145,7 @@ public class BreakTrackingService : IBreakTrackingService
 
     public async Task<EmployeeBreakStatusDto?> GetEmployeeStatusAsync(int employeeId)
     {
+        await _autoClose.CloseExpiredAsync(employeeId);
         var employee = await _db.Employees.AsNoTracking()
             .Include(e => e.Department)
             .Include(e => e.Shift)
@@ -174,9 +182,14 @@ public class BreakTrackingService : IBreakTrackingService
             return (false, "Break type must be Comfort or Meal.", null);
 
         var type = BreakTypes.Normalize(breakType);
+        var closedIds = await _autoClose.CloseExpiredAsync(employeeId);
         var open = await _db.BreakSessions.FirstOrDefaultAsync(b => b.EmployeeId == employeeId && b.InTime == null);
         if (open is null)
+        {
+            if (closedIds.Contains(employeeId))
+                return (true, null, await GetEmployeeStatusAsync(employeeId));
             return await RecordOutAsync(employeeId, type, userId);
+        }
 
         var openType = string.IsNullOrWhiteSpace(open.BreakType) ? BreakTypes.Comfort : BreakTypes.Normalize(open.BreakType);
         if (!openType.Equals(type, StringComparison.OrdinalIgnoreCase))
@@ -195,6 +208,7 @@ public class BreakTrackingService : IBreakTrackingService
             .FirstOrDefaultAsync(e => e.Id == employeeId && !e.IsDeleted);
         if (employee is null) return (false, "Employee not found.", null);
 
+        await _autoClose.CloseExpiredAsync(employeeId);
         var open = await _db.BreakSessions.FirstOrDefaultAsync(b => b.EmployeeId == employeeId && b.InTime == null);
         if (open is not null)
         {
@@ -233,16 +247,22 @@ public class BreakTrackingService : IBreakTrackingService
 
     public async Task<(bool Ok, string? Error, EmployeeBreakStatusDto? Data)> RecordInAsync(int employeeId, string? breakType, string? userId)
     {
-        var employee = await _db.Employees.Include(e => e.Department)
+        var employee = await _db.Employees.Include(e => e.Department).Include(e => e.Shift)
             .FirstOrDefaultAsync(e => e.Id == employeeId);
         if (employee is null) return (false, "Employee not found.", null);
 
+        var closedIds = await _autoClose.CloseExpiredAsync(employeeId);
         var open = await _db.BreakSessions
             .Where(b => b.EmployeeId == employeeId && b.InTime == null)
             .OrderByDescending(b => b.OutTime)
             .FirstOrDefaultAsync();
 
-        if (open is null) return (false, "Employee is not on break. Capture out-time first.", null);
+        if (open is null)
+        {
+            if (closedIds.Contains(employeeId))
+                return (true, null, await GetEmployeeStatusAsync(employeeId));
+            return (false, "Employee is not on break. Capture out-time first.", null);
+        }
 
         var openType = string.IsNullOrWhiteSpace(open.BreakType) ? BreakTypes.Comfort : BreakTypes.Normalize(open.BreakType);
         if (!string.IsNullOrWhiteSpace(breakType))
@@ -259,21 +279,32 @@ public class BreakTrackingService : IBreakTrackingService
         if (now < open.OutTime)
             return (false, "In-time cannot be earlier than out-time.", null);
 
-        var durationSeconds = TimeDisplay.ElapsedSeconds(open.OutTime, now);
-        open.InTime = now;
+        var closeAt = ShiftWindow.AutoCloseAt(employee.Shift, open.BreakDate, open.OutTime);
+        var inTime = now;
+        var autoClosed = false;
+        if (closeAt.HasValue && now >= closeAt.Value)
+        {
+            inTime = closeAt.Value;
+            autoClosed = true;
+        }
+
+        var durationSeconds = TimeDisplay.ElapsedSeconds(open.OutTime, inTime);
+        open.InTime = inTime;
         open.DurationSeconds = durationSeconds;
-        open.ClosedByUserId = userId;
+        open.ClosedByUserId = autoClosed ? null : userId;
+        open.IsAutoClosed = autoClosed;
         if (string.IsNullOrWhiteSpace(open.BreakType))
             open.BreakType = BreakTypes.Comfort;
         await _db.SaveChangesAsync();
-        await _audit.LogAsync(userId, "BreakIn", "BreakSession", open.Id.ToString(),
-            $"Employee: {employee.FullName} ({employee.EmployeeCode}). {openType} out: {TimeDisplay.FormatLocalDateClock(open.OutTime)}. In: {TimeDisplay.FormatLocalDateClock(now)}. Duration {TimeDisplay.FormatSeconds(durationSeconds)}.");
+        await _audit.LogAsync(userId, autoClosed ? "BreakAutoClose" : "BreakIn", "BreakSession", open.Id.ToString(),
+            $"Employee: {employee.FullName} ({employee.EmployeeCode}). {openType} out: {TimeDisplay.FormatLocalDateClock(open.OutTime)}. In{(autoClosed ? " (shift end)" : "")}: {TimeDisplay.FormatLocalDateClock(inTime)}. Duration {TimeDisplay.FormatSeconds(durationSeconds)}.");
 
         return (true, null, await GetEmployeeStatusAsync(employeeId));
     }
 
     public async Task<IReadOnlyList<BreakSessionDto>> GetSessionsAsync(DateOnly? from, DateOnly? to, int? employeeId, int? departmentId, string? breakType = null)
     {
+        await _autoClose.CloseExpiredAsync(employeeId);
         var fromDate = from ?? TimeDisplay.TodayLocal();
         var toDate = to ?? fromDate;
 
@@ -322,7 +353,8 @@ public class BreakTrackingService : IBreakTrackingService
             duration,
             TimeDisplay.FormatSeconds(duration),
             b.BreakDate,
-            inTime is null);
+            inTime is null,
+            b.IsAutoClosed);
     }
 
     private static EmployeeBreakStatusDto BuildStatus(
@@ -356,15 +388,28 @@ public class BreakTrackingService : IBreakTrackingService
             ? null
             : (string.IsNullOrWhiteSpace(open.BreakType) ? BreakTypes.Comfort : BreakTypes.Normalize(open.BreakType));
         var openOut = open is null ? (DateTime?)null : TimeDisplay.AsLocal(open.OutTime);
+        var closeAt = open is null
+            ? null
+            : ShiftWindow.AutoCloseAt(employee.Shift, open.BreakDate, openOut ?? open.OutTime);
+        var stillOpen = open is not null && (!closeAt.HasValue || localNow < closeAt.Value);
+        var openEnd = stillOpen || !closeAt.HasValue ? localNow : closeAt.Value;
+        var openSeconds = openOut is null ? 0 : TimeDisplay.ElapsedSeconds(openOut.Value, openEnd);
         var openCountsTowardShift = openOut.HasValue && livePeriod.HasValue && livePeriod.Value.Contains(openOut.Value);
-        var openSeconds = openOut is null ? 0 : TimeDisplay.ElapsedSeconds(openOut.Value, localNow);
-        var comfortOpen = openCountsTowardShift && BreakTypes.Comfort.Equals(openType, StringComparison.OrdinalIgnoreCase) ? openSeconds : 0;
-        var mealOpen = openCountsTowardShift && BreakTypes.Meal.Equals(openType, StringComparison.OrdinalIgnoreCase) ? openSeconds : 0;
+        var comfortOpen = stillOpen && openCountsTowardShift && BreakTypes.Comfort.Equals(openType, StringComparison.OrdinalIgnoreCase) ? openSeconds : 0;
+        var mealOpen = stillOpen && openCountsTowardShift && BreakTypes.Meal.Equals(openType, StringComparison.OrdinalIgnoreCase) ? openSeconds : 0;
+        if (!stillOpen && openCountsTowardShift && openSeconds > 0)
+        {
+            if (BreakTypes.Meal.Equals(openType, StringComparison.OrdinalIgnoreCase))
+                mealClosed += openSeconds;
+            else
+                comfortClosed += openSeconds;
+        }
 
         var comfortTotal = comfortClosed + comfortOpen;
         var mealTotal = mealClosed + mealOpen;
         var (comfortStatus, comfortColor) = BreakStatusCodes.FromTotalSeconds(comfortTotal, comfortLimitMinutes);
         var (mealStatus, mealColor) = BreakStatusCodes.FromTotalSeconds(mealTotal, mealLimitMinutes);
+        DateTime? shiftPeriodEnd = closeAt ?? livePeriod?.End;
 
         return new EmployeeBreakStatusDto(
             employee.Id,
@@ -382,10 +427,10 @@ public class BreakTrackingService : IBreakTrackingService
             mealStatus,
             mealColor,
             mealClosedSessions.Count,
-            open is not null,
-            openType,
-            openOut,
-            openOut is null ? null : openSeconds,
+            stillOpen,
+            stillOpen ? openType : null,
+            stillOpen ? openOut : null,
+            stillOpen ? openSeconds : null,
             comfortClosed,
             mealClosed,
             withinShift,
@@ -401,7 +446,8 @@ public class BreakTrackingService : IBreakTrackingService
             comfortSessions.Count,
             mealSessions.Count,
             comfortStartLimit,
-            mealStartLimit);
+            mealStartLimit,
+            shiftPeriodEnd);
     }
 
     private async Task<int> CountStartsInPeriodAsync(int employeeId, string breakType, ShiftPeriod period)
