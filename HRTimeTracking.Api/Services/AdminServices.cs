@@ -56,12 +56,14 @@ public class UserAdminService : IUserAdminService
         if (!await _roleManager.RoleExistsAsync(request.Role))
             return (false, "Role is not configured.", null);
 
+        var userName = request.UserName.Trim();
+        if (string.IsNullOrWhiteSpace(userName))
+            return (false, "Username is required.", null);
+
         var user = new ApplicationUser
         {
-            UserName = request.UserName.Trim(),
-            Email = request.Email.Trim(),
+            UserName = userName,
             FullName = request.FullName.Trim(),
-            EmailConfirmed = true,
             IsActive = true,
             CreatedAt = DateTime.UtcNow
         };
@@ -90,7 +92,6 @@ public class UserAdminService : IUserAdminService
         if (user is null) return (false, "User not found.", null);
 
         user.FullName = request.FullName.Trim();
-        user.Email = request.Email.Trim();
         user.IsActive = request.IsActive;
         var update = await _userManager.UpdateAsync(user);
         if (!update.Succeeded)
@@ -139,7 +140,6 @@ public class UserAdminService : IUserAdminService
     private static UserDto Map(ApplicationUser user, IList<string> roles, IReadOnlyList<string> permissions) => new(
         user.Id,
         user.UserName ?? string.Empty,
-        user.Email ?? string.Empty,
         user.FullName,
         roles.ToList(),
         user.IsActive,

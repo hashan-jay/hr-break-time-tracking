@@ -34,7 +34,6 @@ public class JwtTokenService : IJwtTokenService
         {
             new(JwtRegisteredClaimNames.Sub, user.Id),
             new(JwtRegisteredClaimNames.UniqueName, user.UserName ?? string.Empty),
-            new(JwtRegisteredClaimNames.Email, user.Email ?? string.Empty),
             new(ClaimTypes.NameIdentifier, user.Id),
             new(ClaimTypes.Name, user.UserName ?? string.Empty),
             new("fullName", user.FullName)
@@ -107,7 +106,6 @@ public class AuthService : IAuthService
         var dto = new DTOs.UserDto(
             user.Id,
             user.UserName ?? string.Empty,
-            user.Email ?? string.Empty,
             user.FullName,
             roles.ToList(),
             user.IsActive,
@@ -127,7 +125,6 @@ public class AuthService : IAuthService
         return new DTOs.UserDto(
             user.Id,
             user.UserName ?? string.Empty,
-            user.Email ?? string.Empty,
             user.FullName,
             roles.ToList(),
             user.IsActive,

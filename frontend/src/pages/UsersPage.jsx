@@ -5,7 +5,6 @@ import { RBAC_CATEGORIES, SECTIONS } from '../auth/AuthContext';
 
 const emptyForm = {
   userName: '',
-  email: '',
   fullName: '',
   password: '',
   role: 'HRAssistant',
@@ -75,7 +74,6 @@ export default function UsersPage() {
     try {
       await api.put(`/users/${user.id}`, {
         fullName: user.fullName,
-        email: user.email,
         role,
         isActive: user.isActive,
       });
@@ -189,7 +187,6 @@ export default function UsersPage() {
           <h2>Create user</h2>
           <label>Username<input required value={form.userName} onChange={(e) => setForm({ ...form, userName: e.target.value })} /></label>
           <label>Full name<input required value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} /></label>
-          <label>Email<input required type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></label>
           <label>Password<input required type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} /></label>
           <label>
             RBAC category
@@ -207,7 +204,7 @@ export default function UsersPage() {
             <thead>
               <tr>
                 <th>User</th>
-                <th>Email</th>
+                <th>Username</th>
                 <th>RBAC category</th>
                 <th>Active</th>
                 <th />
@@ -218,9 +215,8 @@ export default function UsersPage() {
                 <tr key={u.id}>
                   <td>
                     <strong>{u.fullName}</strong>
-                    <div className="muted">{u.userName}</div>
                   </td>
-                  <td>{u.email}</td>
+                  <td>{u.userName}</td>
                   <td>
                     <select
                       value={u.roles?.[0] || 'HRAssistant'}

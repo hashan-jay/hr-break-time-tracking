@@ -15,7 +15,6 @@ public record LoginResponse(
 public record UserDto(
     string Id,
     string UserName,
-    string Email,
     string FullName,
     IReadOnlyList<string> Roles,
     bool IsActive,
@@ -25,14 +24,12 @@ public record UserDto(
 
 public record CreateUserRequest(
     [Required] string UserName,
-    [Required, EmailAddress] string Email,
     [Required] string FullName,
     [Required, MinLength(8)] string Password,
     [Required] string Role);
 
 public record UpdateUserRequest(
     [Required] string FullName,
-    [Required, EmailAddress] string Email,
     [Required] string Role,
     bool IsActive);
 

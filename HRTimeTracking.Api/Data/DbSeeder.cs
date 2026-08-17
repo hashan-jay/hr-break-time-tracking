@@ -126,11 +126,11 @@ public static class DbSeeder
         }
 
         await EnsureUserAsync(userManager, config, "SeedUsers:Developer", AppRoles.Developer,
-            "developer", "developer@local", "System Developer", "Developer@123");
+            "developer", "System Developer", "Developer@123");
         await EnsureUserAsync(userManager, config, "SeedUsers:HRManager", AppRoles.HRManager,
-            "hrmanager", "hrmanager@local", "HR Manager", "HrManager@123");
+            "hrmanager", "HR Manager", "HrManager@123");
         await EnsureUserAsync(userManager, config, "SeedUsers:HRAssistant", AppRoles.HRAssistant,
-            "hrassistant", "hrassistant@local", "HR Assistant", "HrAssistant@123");
+            "hrassistant", "HR Assistant", "HrAssistant@123");
 
         if (!await db.Shifts.AnyAsync())
         {
@@ -188,13 +188,11 @@ public static class DbSeeder
         string configSection,
         string role,
         string defaultUserName,
-        string defaultEmail,
         string defaultFullName,
         string defaultPassword)
     {
         var section = config.GetSection(configSection);
         var userName = section["UserName"] ?? defaultUserName;
-        var email = section["Email"] ?? defaultEmail;
         var fullName = section["FullName"] ?? defaultFullName;
         var password = section["Password"] ?? defaultPassword;
 
@@ -204,9 +202,7 @@ public static class DbSeeder
         var user = new ApplicationUser
         {
             UserName = userName,
-            Email = email,
             FullName = fullName,
-            EmailConfirmed = true,
             IsActive = true,
             CreatedAt = DateTime.UtcNow
         };
