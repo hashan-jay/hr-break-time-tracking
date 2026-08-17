@@ -73,6 +73,22 @@ public class SettingsController : ControllerBase
     public async Task<ActionResult<IReadOnlyList<SystemSettingDto>>> GetAll()
         => Ok(await _service.GetAllAsync());
 
+    [HttpGet("department-start-limits")]
+    public async Task<ActionResult<IReadOnlyList<DepartmentStartLimitDto>>> GetDepartmentStartLimits(
+        [FromQuery] bool includeDeleted = false)
+        => Ok(await _service.GetDepartmentStartLimitsAsync(includeDeleted));
+
+    [HttpPut("department-start-limits/{departmentId:int}")]
+    public async Task<ActionResult<DepartmentStartLimitDto>> UpdateDepartmentStartLimits(
+        int departmentId,
+        [FromBody] UpdateDepartmentStartLimitsRequest request)
+    {
+        var (ok, error, data) = await _service.UpdateDepartmentStartLimitsAsync(
+            departmentId, request.MealStartLimit, request.ComfortStartLimit, User.GetUserId());
+        if (!ok || data is null) return BadRequest(new ApiMessage(error ?? "Update failed."));
+        return Ok(data);
+    }
+
     [HttpPut("{key}")]
     public async Task<ActionResult<SystemSettingDto>> Update(string key, [FromBody] UpdateSettingRequest request)
     {

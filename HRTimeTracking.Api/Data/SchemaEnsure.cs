@@ -96,7 +96,7 @@ public static class SchemaEnsure
                AND NOT EXISTS (SELECT 1 FROM dbo.SystemSettings WHERE [Key] = N'MealBreakStartLimit')
             BEGIN
                 INSERT INTO dbo.SystemSettings ([Key], [Value], [Description])
-                VALUES (N'MealBreakStartLimit', N'1', N'Maximum Meal break starts allowed per employee per shift (Developer adjustable).');
+                VALUES (N'MealBreakStartLimit', N'1', N'Default Meal break starts for new departments (Developer adjustable).');
             END
             """);
 
@@ -105,7 +105,45 @@ public static class SchemaEnsure
                AND NOT EXISTS (SELECT 1 FROM dbo.SystemSettings WHERE [Key] = N'ComfortBreakStartLimit')
             BEGIN
                 INSERT INTO dbo.SystemSettings ([Key], [Value], [Description])
-                VALUES (N'ComfortBreakStartLimit', N'2', N'Maximum Comfort break starts allowed per employee per shift (Developer adjustable).');
+                VALUES (N'ComfortBreakStartLimit', N'2', N'Default Comfort break starts for new departments (Developer adjustable).');
+            END
+            """);
+
+        // Per-department start limits. Additive columns only; copy current global defaults onto
+        // existing departments once, then never overwrite department-specific values.
+        await db.Database.ExecuteSqlRawAsync("""
+            IF COL_LENGTH('dbo.Departments', 'MealBreakStartLimit') IS NULL
+            BEGIN
+                ALTER TABLE dbo.Departments ADD MealBreakStartLimit int NOT NULL
+                    CONSTRAINT DF_Departments_MealBreakStartLimit DEFAULT (1);
+
+                DECLARE @mealDefault int = 1;
+                SELECT @mealDefault = TRY_CAST([Value] AS int)
+                FROM dbo.SystemSettings WHERE [Key] = N'MealBreakStartLimit';
+                IF @mealDefault IS NULL OR @mealDefault < 1 SET @mealDefault = 1;
+                IF @mealDefault > 20 SET @mealDefault = 20;
+
+                DECLARE @mealSql nvarchar(300) =
+                    N'UPDATE dbo.Departments SET MealBreakStartLimit = ' + CAST(@mealDefault AS nvarchar(10));
+                EXEC sp_executesql @mealSql;
+            END
+            """);
+
+        await db.Database.ExecuteSqlRawAsync("""
+            IF COL_LENGTH('dbo.Departments', 'ComfortBreakStartLimit') IS NULL
+            BEGIN
+                ALTER TABLE dbo.Departments ADD ComfortBreakStartLimit int NOT NULL
+                    CONSTRAINT DF_Departments_ComfortBreakStartLimit DEFAULT (2);
+
+                DECLARE @comfortDefault int = 2;
+                SELECT @comfortDefault = TRY_CAST([Value] AS int)
+                FROM dbo.SystemSettings WHERE [Key] = N'ComfortBreakStartLimit';
+                IF @comfortDefault IS NULL OR @comfortDefault < 1 SET @comfortDefault = 2;
+                IF @comfortDefault > 20 SET @comfortDefault = 20;
+
+                DECLARE @comfortSql nvarchar(300) =
+                    N'UPDATE dbo.Departments SET ComfortBreakStartLimit = ' + CAST(@comfortDefault AS nvarchar(10));
+                EXEC sp_executesql @comfortSql;
             END
             """);
     }

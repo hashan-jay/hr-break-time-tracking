@@ -44,7 +44,6 @@ function BreakTypeBoard({
           <h2>{title}</h2>
           <p>
             {subtitle} Daily limit: <strong>{limitMinutes ?? '—'} minutes</strong>.
-            {' '}Starts allowed: <strong>{startLimit ?? '—'}</strong> per shift.
           </p>
         </div>
         <div className="break-type-board__chip">
@@ -70,10 +69,6 @@ function BreakTypeBoard({
                     <strong>{selectedFields.totalDisplay}</strong> ({selectedFields.totalSeconds}s)
                   </div>
                   <div>
-                    Starts this shift:{' '}
-                    <strong>{selectedFields.startCount}/{startLimit ?? '—'}</strong>
-                  </div>
-                  <div>
                     {onThisBreak
                       ? `Out since ${formatLocalClock(selected.currentOutTime)} · open ${formatElapsed(selected.currentBreakElapsedSeconds)}`
                       : blockedByOther
@@ -81,7 +76,7 @@ function BreakTypeBoard({
                         : offShift
                           ? offShiftReason(selected)
                           : startBlocked
-                            ? startLimitReason(selected, breakType, startLimit)
+                            ? startLimitReason(selected, breakType)
                             : 'Currently in office'}
                   </div>
                 </div>
@@ -147,7 +142,7 @@ function BreakTypeBoard({
                   : offShift
                     ? offShiftReason(e)
                     : startBlocked
-                      ? startLimitReason(e, breakType, startLimit)
+                      ? startLimitReason(e, breakType)
                       : undefined;
                 return (
                   <tr
@@ -170,7 +165,7 @@ function BreakTypeBoard({
                     <td>{e.departmentName}</td>
                     <td className={fields.isOnThisBreak ? 'is-live-total' : undefined}>
                       <strong>{fields.totalDisplay}</strong>
-                      <div className="muted">{fields.totalSeconds}s · {fields.startCount}/{startLimit ?? '—'} starts</div>
+                      <div className="muted">{fields.totalSeconds}s</div>
                     </td>
                     <td><StatusBadge status={fields.status} color={fields.statusColor} /></td>
                     <td>
@@ -180,9 +175,7 @@ function BreakTypeBoard({
                           ? `On ${e.currentBreakType} break`
                           : offShift
                             ? 'Off shift'
-                            : startBlocked
-                              ? 'Start limit reached'
-                              : 'In office'}
+                            : 'In office'}
                     </td>
                   </tr>
                 );
@@ -303,7 +296,7 @@ export default function TrackingPage() {
     const limit = breakType === BREAK_TYPES.MEAL ? board?.mealStartLimit : board?.comfortStartLimit;
     if (employee && (mode === 'toggle' || mode === 'out') && startLimitReached(employee, breakType, limit)) {
       setMsgType('error');
-      setMessage(startLimitReason(employee, breakType, limit));
+      setMessage(startLimitReason(employee, breakType));
       return;
     }
     busyRef.current = true;
@@ -320,7 +313,8 @@ export default function TrackingPage() {
       await load();
     } catch (err) {
       setMsgType('error');
-      setMessage(apiErrorMessage(err, 'Capture failed.'));
+      const raw = apiErrorMessage(err, 'Capture failed.');
+      setMessage(/start limit/i.test(raw) ? startLimitReason(employee, breakType) : raw);
     } finally {
       busyRef.current = false;
       setBusy(false);

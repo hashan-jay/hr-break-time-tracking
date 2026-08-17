@@ -13,7 +13,6 @@ import {
   isOffShift,
   offShiftReason,
   startLimitReached,
-  startLimitReason,
   typeFields,
 } from '../lib/breakHelpers';
 
@@ -44,8 +43,6 @@ function PortalBreakSection({
           <h2>{title}</h2>
           <p>
             Daily limit: <strong>{limitMinutes ?? '—'} minutes</strong>
-            {' · '}
-            Starts: <strong>{startLimit ?? '—'}</strong> per shift
           </p>
         </div>
         <div className="portal-onbreak-chip">
@@ -66,10 +63,6 @@ function PortalBreakSection({
                 <div className="selected-meta">
                   <div>This shift: <strong>{fields.totalDisplay}</strong></div>
                   <div>
-                    Starts this shift:{' '}
-                    <strong>{fields.startCount}/{startLimit ?? '—'}</strong>
-                  </div>
-                  <div>
                     {onThisBreak
                       ? `Out since ${formatLocalClock(selected.currentOutTime)}`
                       : blockedByOther
@@ -77,7 +70,7 @@ function PortalBreakSection({
                         : offShift
                           ? offShiftReason(selected)
                           : startBlocked
-                            ? startLimitReason(selected, breakType, startLimit)
+                            ? `Cannot start another ${breakType.toLowerCase()} break this shift`
                             : `Ready to start ${breakType.toLowerCase()} break`}
                   </div>
                 </div>
@@ -123,7 +116,7 @@ function PortalBreakSection({
                     : offShift
                       ? offShiftReason(e)
                       : startBlocked
-                        ? startLimitReason(e, breakType, startLimit)
+                        ? `Cannot start another ${breakType.toLowerCase()} break this shift`
                         : undefined;
                   return (
                     <tr
@@ -146,7 +139,6 @@ function PortalBreakSection({
                       <td>{e.departmentName}</td>
                       <td className={`col-today ${row.isOnThisBreak ? 'is-live-total' : ''}`}>
                         <strong>{row.totalDisplay}</strong>
-                        <div className="muted">{row.startCount}/{startLimit ?? '—'} starts</div>
                       </td>
                       <td><StatusBadge status={row.status} color={row.statusColor} /></td>
                       <td>
@@ -156,9 +148,7 @@ function PortalBreakSection({
                             ? `On ${e.currentBreakType}`
                             : offShift
                               ? 'Off shift'
-                              : startBlocked
-                                ? 'Start limit reached'
-                                : 'In office'}
+                              : 'In office'}
                       </td>
                     </tr>
                   );
@@ -298,7 +288,7 @@ export default function PortalPage() {
     const limit = breakType === BREAK_TYPES.MEAL ? board?.mealStartLimit : board?.comfortStartLimit;
     if (employee && startLimitReached(employee, breakType, limit)) {
       setMsgType('error');
-      setMessage(startLimitReason(employee, breakType, limit));
+      setMessage(`Cannot start another ${breakType.toLowerCase()} break this shift.`);
       return;
     }
     busyRef.current = true;
@@ -315,7 +305,10 @@ export default function PortalPage() {
       await loadBoard();
     } catch (err) {
       setMsgType('error');
-      setMessage(apiErrorMessage(err, 'Could not record break time.'));
+      const raw = apiErrorMessage(err, 'Could not record break time.');
+      setMessage(/start limit/i.test(raw)
+        ? `Cannot start another ${breakType.toLowerCase()} break this shift.`
+        : raw);
     } finally {
       busyRef.current = false;
       setBusy(false);
@@ -344,9 +337,9 @@ export default function PortalPage() {
           <div className="portal-employee-header__text">
             <h1 className="portal-employee-title">Employee Break Portal</h1>
             <p className="portal-employee-meta">
-              Meal {board?.mealLimitMinutes ?? 60} min · {board?.mealStartLimit ?? 1} start
+              Meal {board?.mealLimitMinutes ?? 60} min
               {' · '}
-              Comfort {board?.comfortLimitMinutes ?? 20} min · {board?.comfortStartLimit ?? 2} starts
+              Comfort {board?.comfortLimitMinutes ?? 20} min
               {' · '}
               <kbd>Enter</kbd> / <kbd>Space</kbd> to start or stop
             </p>

@@ -140,25 +140,34 @@ export function startCount(employee, breakType) {
 }
 
 /** True when this employee cannot start another break of this type (ending an open one is still allowed). */
+export function employeeStartLimit(employee, breakType, fallback) {
+  const fromEmployee = breakType === BREAK_TYPES.MEAL
+    ? employee?.mealStartLimit
+    : employee?.comfortStartLimit;
+  const n = Number(fromEmployee);
+  if (Number.isFinite(n) && n > 0) return n;
+  const fb = Number(fallback);
+  if (Number.isFinite(fb) && fb > 0) return fb;
+  return breakType === BREAK_TYPES.MEAL ? 1 : 2;
+}
+
 export function startLimitReached(employee, breakType, startLimit) {
   const fields = typeFields(employee, breakType);
   if (fields.isOnThisBreak) return false;
-  const limit = Number(startLimit);
-  if (!Number.isFinite(limit) || limit <= 0) return false;
+  const limit = employeeStartLimit(employee, breakType, startLimit);
   return fields.startCount >= limit;
 }
 
-export function startLimitReason(employee, breakType, startLimit) {
-  const used = startCount(employee, breakType);
-  const limit = Number(startLimit) || 0;
-  return `${breakType} start limit reached (${used}/${limit}) this shift`;
+export function startLimitReason(_employee, breakType) {
+  const label = String(breakType || 'break').toLowerCase();
+  return `Cannot start another ${label} break this shift`;
 }
 
 export function settingLabel(key) {
   if (key === 'MealBreakLimitMinutes') return 'Meal break daily limit (minutes)';
   if (key === 'ComfortBreakLimitMinutes') return 'Comfort break daily limit (minutes)';
-  if (key === 'MealBreakStartLimit') return 'Meal break start limit (times per shift)';
-  if (key === 'ComfortBreakStartLimit') return 'Comfort break start limit (times per shift)';
+  if (key === 'MealBreakStartLimit') return 'Default Meal start limit for new departments';
+  if (key === 'ComfortBreakStartLimit') return 'Default Comfort start limit for new departments';
   if (key === 'DailyBreakLimitMinutes') return 'Legacy comfort limit alias (synced)';
   return key;
 }

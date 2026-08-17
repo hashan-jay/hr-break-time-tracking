@@ -208,6 +208,9 @@ namespace HRTimeTracking.Api.Data.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<int>("ComfortBreakStartLimit")
+                        .HasColumnType("int");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
@@ -220,6 +223,9 @@ namespace HRTimeTracking.Api.Data.Migrations
 
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("bit");
+
+                    b.Property<int>("MealBreakStartLimit")
+                        .HasColumnType("int");
 
                     b.Property<string>("Name")
                         .IsRequired()

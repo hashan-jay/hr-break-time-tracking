@@ -180,8 +180,8 @@ export default function DashboardPage() {
               <div className="portal-section-head">
                 <h2>Meal Break dashboard</h2>
                 <p>
-                  Meal limit: {data.mealLimitMinutes ?? 60} minutes · Starts allowed:{' '}
-                  {data.mealStartLimit ?? 1} per shift. Status counts for each employee&apos;s current shift.
+                  Meal limit: {data.mealLimitMinutes ?? 60} minutes. Status counts for each
+                  employee&apos;s current shift.
                 </p>
               </div>
               <section className="portal-kpi-grid" aria-label="Meal break KPIs">
@@ -195,8 +195,8 @@ export default function DashboardPage() {
               <div className="portal-section-head">
                 <h2>Comfort Break dashboard</h2>
                 <p>
-                  Comfort limit: {data.comfortLimitMinutes ?? 20} minutes · Starts allowed:{' '}
-                  {data.comfortStartLimit ?? 2} per shift. Status counts for each employee&apos;s current shift.
+                  Comfort limit: {data.comfortLimitMinutes ?? 20} minutes. Status counts for each
+                  employee&apos;s current shift.
                 </p>
               </div>
               <section className="portal-kpi-grid" aria-label="Comfort break KPIs">
@@ -245,12 +245,10 @@ export default function DashboardPage() {
                           <td>{e.fullName}</td>
                           <td className={meal.isOnThisBreak ? 'is-live-total' : undefined}>
                             <strong>{meal.totalDisplay}</strong>
-                            <div className="muted">{meal.startCount}/{board?.mealStartLimit ?? data?.mealStartLimit ?? 1} starts</div>
                           </td>
                           <td><StatusBadge status={meal.status} color={meal.statusColor} /></td>
                           <td className={comfort.isOnThisBreak ? 'is-live-total' : undefined}>
                             <strong>{comfort.totalDisplay}</strong>
-                            <div className="muted">{comfort.startCount}/{board?.comfortStartLimit ?? data?.comfortStartLimit ?? 2} starts</div>
                           </td>
                           <td><StatusBadge status={comfort.status} color={comfort.statusColor} /></td>
                           <td>

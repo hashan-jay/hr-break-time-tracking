@@ -45,7 +45,9 @@ public record DepartmentDto(
     bool IsDeleted,
     DateTime? DeletedAt,
     int EmployeeCount,
-    DateTime CreatedAt);
+    DateTime CreatedAt,
+    int MealStartLimit = BreakStatusCodes.DefaultMealStartLimit,
+    int ComfortStartLimit = BreakStatusCodes.DefaultComfortStartLimit);
 
 public record CreateDepartmentRequest(
     [Required, MaxLength(100)] string Name,
@@ -144,7 +146,9 @@ public record EmployeeBreakStatusDto(
     string? ShiftDisplay = null,
     DateTime? NextShiftStart = null,
     int ComfortStartCountToday = 0,
-    int MealStartCountToday = 0)
+    int MealStartCountToday = 0,
+    int ComfortStartLimit = BreakStatusCodes.DefaultComfortStartLimit,
+    int MealStartLimit = BreakStatusCodes.DefaultMealStartLimit)
 {
     public bool IsOnComfortBreak => IsOnBreak && CurrentBreakType == BreakTypes.Comfort;
     public bool IsOnMealBreak => IsOnBreak && CurrentBreakType == BreakTypes.Meal;
@@ -234,6 +238,18 @@ public record DashboardDto(
 public record SystemSettingDto(int Id, string Key, string Value, string? Description);
 
 public record UpdateSettingRequest([Required, MaxLength(500)] string Value);
+
+public record DepartmentStartLimitDto(
+    int DepartmentId,
+    string DepartmentName,
+    bool IsDeleted,
+    int EmployeeCount,
+    int MealStartLimit,
+    int ComfortStartLimit);
+
+public record UpdateDepartmentStartLimitsRequest(
+    [Required, Range(BreakStatusCodes.MinStartLimit, BreakStatusCodes.MaxStartLimit)] int MealStartLimit,
+    [Required, Range(BreakStatusCodes.MinStartLimit, BreakStatusCodes.MaxStartLimit)] int ComfortStartLimit);
 
 public record AuditLogDto(
     long Id,

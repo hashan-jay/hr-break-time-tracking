@@ -75,14 +75,14 @@ public static class DbSeeder
             await db.SaveChangesAsync();
         }
 
-        // Additive: start-count limits. Insert only; never overwrite existing values.
+        // Additive: start-count defaults for new departments. Insert only; never overwrite existing values.
         if (!await db.SystemSettings.AnyAsync(s => s.Key == Services.SettingsService.MealStartLimitKey))
         {
             db.SystemSettings.Add(new SystemSetting
             {
                 Key = Services.SettingsService.MealStartLimitKey,
                 Value = BreakStatusCodes.DefaultMealStartLimit.ToString(),
-                Description = "Maximum Meal break starts allowed per employee per shift (Developer adjustable)."
+                Description = "Default Meal break starts for new departments (Developer adjustable)."
             });
             await db.SaveChangesAsync();
         }
@@ -93,8 +93,25 @@ public static class DbSeeder
             {
                 Key = Services.SettingsService.ComfortStartLimitKey,
                 Value = BreakStatusCodes.DefaultComfortStartLimit.ToString(),
-                Description = "Maximum Comfort break starts allowed per employee per shift (Developer adjustable)."
+                Description = "Default Comfort break starts for new departments (Developer adjustable)."
             });
+            await db.SaveChangesAsync();
+        }
+
+        // Soft-update start-limit descriptions only (values untouched).
+        var mealStartSetting = await db.SystemSettings.FirstOrDefaultAsync(s => s.Key == Services.SettingsService.MealStartLimitKey);
+        if (mealStartSetting is not null &&
+            (mealStartSetting.Description is null || mealStartSetting.Description.Contains("per employee per shift", StringComparison.OrdinalIgnoreCase)))
+        {
+            mealStartSetting.Description = "Default Meal break starts for new departments (Developer adjustable).";
+            await db.SaveChangesAsync();
+        }
+
+        var comfortStartSetting = await db.SystemSettings.FirstOrDefaultAsync(s => s.Key == Services.SettingsService.ComfortStartLimitKey);
+        if (comfortStartSetting is not null &&
+            (comfortStartSetting.Description is null || comfortStartSetting.Description.Contains("per employee per shift", StringComparison.OrdinalIgnoreCase)))
+        {
+            comfortStartSetting.Description = "Default Comfort break starts for new departments (Developer adjustable).";
             await db.SaveChangesAsync();
         }
 

@@ -52,12 +52,12 @@ export default function BreakReportDocument({ report, filters }) {
           <strong>{empLabel}</strong>
         </div>
         <div>
-          <span>Meal limit</span>
-          <strong>{report.mealLimitMinutes} minutes · {report.mealStartLimit ?? 1} starts</strong>
+          <span>Meal duration limit</span>
+          <strong>{report.mealLimitMinutes} minutes</strong>
         </div>
         <div>
-          <span>Comfort limit</span>
-          <strong>{report.comfortLimitMinutes} minutes · {report.comfortStartLimit ?? 2} starts</strong>
+          <span>Comfort duration limit</span>
+          <strong>{report.comfortLimitMinutes} minutes</strong>
         </div>
         <div>
           <span>Employees</span>
@@ -124,8 +124,8 @@ export default function BreakReportDocument({ report, filters }) {
       </section>
 
       <footer className="break-report-document__footer">
-        Meal limit: {report.mealLimitMinutes} min ({report.mealStartLimit ?? 1} starts) · Comfort limit:{' '}
-        {report.comfortLimitMinutes} min ({report.comfortStartLimit ?? 2} starts).
+        Meal limit: {report.mealLimitMinutes} min · Comfort limit:{' '}
+        {report.comfortLimitMinutes} min.
         One row per employee. Totals are the Meal and Comfort time in the selected period.
         Status is EXCEEDED if any shift in that period went over the limit.
       </footer>
@@ -162,8 +162,8 @@ export function renderBreakReportHtml(report, filters) {
       <div><span>Shift</span><strong>${escapeHtml(shiftLabel)}</strong></div>
       <div><span>Department</span><strong>${escapeHtml(deptLabel)}</strong></div>
       <div><span>Employee</span><strong>${escapeHtml(empLabel)}</strong></div>
-      <div><span>Meal limit</span><strong>${report.mealLimitMinutes} minutes · ${report.mealStartLimit ?? 1} starts</strong></div>
-      <div><span>Comfort limit</span><strong>${report.comfortLimitMinutes} minutes · ${report.comfortStartLimit ?? 2} starts</strong></div>
+      <div><span>Meal duration limit</span><strong>${report.mealLimitMinutes} minutes</strong></div>
+      <div><span>Comfort duration limit</span><strong>${report.comfortLimitMinutes} minutes</strong></div>
       <div><span>Employees</span><strong>${report.employeeDays}</strong></div>
     </div>
     <div class="kpis">
@@ -184,7 +184,7 @@ export function renderBreakReportHtml(report, filters) {
       </tbody>
     </table>
     <div class="footer">
-      Meal limit: ${report.mealLimitMinutes} min (${report.mealStartLimit ?? 1} starts) · Comfort limit: ${report.comfortLimitMinutes} min (${report.comfortStartLimit ?? 2} starts).
+      Meal limit: ${report.mealLimitMinutes} min · Comfort limit: ${report.comfortLimitMinutes} min.
       One row per employee. Totals are the Meal and Comfort time in the selected period.
       Status is EXCEEDED if any shift in that period went over the limit.
     </div>

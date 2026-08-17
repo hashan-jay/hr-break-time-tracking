@@ -20,5 +20,11 @@ public class Department
 
     public DateTime? UpdatedAt { get; set; }
 
+    /// <summary>Meal break starts allowed per employee per shift for this department.</summary>
+    public int MealBreakStartLimit { get; set; } = BreakStatusCodes.DefaultMealStartLimit;
+
+    /// <summary>Comfort break starts allowed per employee per shift for this department.</summary>
+    public int ComfortBreakStartLimit { get; set; } = BreakStatusCodes.DefaultComfortStartLimit;
+
     public ICollection<Employee> Employees { get; set; } = new List<Employee>();
 }

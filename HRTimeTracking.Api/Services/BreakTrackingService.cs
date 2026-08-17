@@ -36,6 +36,7 @@ public class BreakTrackingService : IBreakTrackingService
         var mealLimit = await _settings.GetMealLimitMinutesAsync();
         var comfortStartLimit = await _settings.GetComfortStartLimitAsync();
         var mealStartLimit = await _settings.GetMealStartLimitAsync();
+        var startLimitsByDepartment = await _settings.GetStartLimitsByDepartmentAsync();
 
         var employeesQuery = _db.Employees.AsNoTracking()
             .Include(e => e.Department)
@@ -85,7 +86,10 @@ public class BreakTrackingService : IBreakTrackingService
         {
             var employeeSessions = sessions.Where(s => s.EmployeeId == e.Id).ToList();
             var livePeriod = ShiftWindow.ActiveAt(e.Shift, now);
-            return BuildStatus(e, employeeSessions, now, comfortLimit, mealLimit, livePeriod);
+            var deptLimits = startLimitsByDepartment.TryGetValue(e.DepartmentId, out var limits)
+                ? limits
+                : (Meal: mealStartLimit, Comfort: comfortStartLimit);
+            return BuildStatus(e, employeeSessions, now, comfortLimit, mealLimit, livePeriod, deptLimits.Meal, deptLimits.Comfort);
         }).ToList();
 
         DateTime? periodStart = null;
@@ -144,6 +148,8 @@ public class BreakTrackingService : IBreakTrackingService
         var livePeriod = ShiftWindow.ActiveAt(employee.Shift, now);
         var comfortLimit = await _settings.GetComfortLimitMinutesAsync();
         var mealLimit = await _settings.GetMealLimitMinutesAsync();
+        var mealStartLimit = await _settings.GetMealStartLimitForDepartmentAsync(employee.DepartmentId);
+        var comfortStartLimit = await _settings.GetComfortStartLimitForDepartmentAsync(employee.DepartmentId);
         var lookback = now.Date.AddDays(-2);
         var sessions = await _db.BreakSessions.AsNoTracking()
             .Where(b => b.EmployeeId == employeeId &&
@@ -159,7 +165,7 @@ public class BreakTrackingService : IBreakTrackingService
         }
 
         var inPeriod = sessions.Where(s => livePeriod is null || ShiftWindow.StartedIn(s.OutTime, livePeriod.Value) || s.InTime is null).ToList();
-        return BuildStatus(employee, inPeriod, now, comfortLimit, mealLimit, livePeriod);
+        return BuildStatus(employee, inPeriod, now, comfortLimit, mealLimit, livePeriod, mealStartLimit, comfortStartLimit);
     }
 
     public async Task<(bool Ok, string? Error, EmployeeBreakStatusDto? Data)> ToggleAsync(int employeeId, string breakType, string? userId)
@@ -202,11 +208,11 @@ public class BreakTrackingService : IBreakTrackingService
             return (false, "This employee is not on a live shift right now. Breaks can only be started during their shift hours.", null);
 
         var startLimit = type == BreakTypes.Meal
-            ? await _settings.GetMealStartLimitAsync()
-            : await _settings.GetComfortStartLimitAsync();
+            ? await _settings.GetMealStartLimitForDepartmentAsync(employee.DepartmentId)
+            : await _settings.GetComfortStartLimitForDepartmentAsync(employee.DepartmentId);
         var startedCount = await CountStartsInPeriodAsync(employeeId, type, period.Value);
         if (startedCount >= startLimit)
-            return (false, $"{type} break start limit reached ({startedCount}/{startLimit}) this shift. Cannot start another {type.ToLowerInvariant()} break.", null);
+            return (false, $"Cannot start another {type.ToLowerInvariant()} break this shift.", null);
 
         var session = new BreakSession
         {
@@ -325,7 +331,9 @@ public class BreakTrackingService : IBreakTrackingService
         DateTime now,
         int comfortLimitMinutes,
         int mealLimitMinutes,
-        ShiftPeriod? livePeriod)
+        ShiftPeriod? livePeriod,
+        int mealStartLimit,
+        int comfortStartLimit)
     {
         var localNow = TimeDisplay.AsLocal(now);
         var withinShift = livePeriod.HasValue;
@@ -391,7 +399,9 @@ public class BreakTrackingService : IBreakTrackingService
                     employee.Shift.SpansNextDay),
             withinShift ? null : ShiftWindow.NextStart(employee.Shift, localNow),
             comfortSessions.Count,
-            mealSessions.Count);
+            mealSessions.Count,
+            comfortStartLimit,
+            mealStartLimit);
     }
 
     private async Task<int> CountStartsInPeriodAsync(int employeeId, string breakType, ShiftPeriod period)

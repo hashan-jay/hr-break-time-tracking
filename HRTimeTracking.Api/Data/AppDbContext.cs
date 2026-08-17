@@ -27,6 +27,8 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
             entity.HasIndex(x => x.IsDeleted);
             entity.Property(x => x.Name).HasMaxLength(100).IsRequired();
             entity.Property(x => x.Description).HasMaxLength(250);
+            entity.Property(x => x.MealBreakStartLimit).IsRequired();
+            entity.Property(x => x.ComfortBreakStartLimit).IsRequired();
         });
 
         builder.Entity<Shift>(entity =>

@@ -144,6 +144,12 @@ public interface ISettingsService
     Task<int> GetMealLimitMinutesAsync();
     Task<int> GetComfortStartLimitAsync();
     Task<int> GetMealStartLimitAsync();
+    Task<IReadOnlyList<DepartmentStartLimitDto>> GetDepartmentStartLimitsAsync(bool includeDeleted = false);
+    Task<(bool Ok, string? Error, DepartmentStartLimitDto? Data)> UpdateDepartmentStartLimitsAsync(
+        int departmentId, int mealStartLimit, int comfortStartLimit, string? userId);
+    Task<int> GetMealStartLimitForDepartmentAsync(int departmentId);
+    Task<int> GetComfortStartLimitForDepartmentAsync(int departmentId);
+    Task<IReadOnlyDictionary<int, (int Meal, int Comfort)>> GetStartLimitsByDepartmentAsync();
 }
 
 public class SettingsService : ISettingsService
@@ -229,6 +235,105 @@ public class SettingsService : ISettingsService
 
     public Task<int> GetMealStartLimitAsync() => GetStartLimitAsync(MealStartLimitKey, BreakStatusCodes.DefaultMealStartLimit);
 
+    public async Task<IReadOnlyList<DepartmentStartLimitDto>> GetDepartmentStartLimitsAsync(bool includeDeleted = false)
+    {
+        var mealDefault = await GetMealStartLimitAsync();
+        var comfortDefault = await GetComfortStartLimitAsync();
+
+        var query = _db.Departments.AsNoTracking().AsQueryable();
+        if (!includeDeleted) query = query.Where(d => !d.IsDeleted);
+
+        var rows = await query
+            .OrderBy(d => d.IsDeleted)
+            .ThenBy(d => d.Name)
+            .Select(d => new
+            {
+                d.Id,
+                d.Name,
+                d.IsDeleted,
+                EmployeeCount = d.Employees.Count(e => !e.IsDeleted),
+                d.MealBreakStartLimit,
+                d.ComfortBreakStartLimit
+            })
+            .ToListAsync();
+
+        return rows
+            .Select(d => new DepartmentStartLimitDto(
+                d.Id,
+                d.Name,
+                d.IsDeleted,
+                d.EmployeeCount,
+                ClampStartLimit(d.MealBreakStartLimit, mealDefault),
+                ClampStartLimit(d.ComfortBreakStartLimit, comfortDefault)))
+            .ToList();
+    }
+
+    public async Task<(bool Ok, string? Error, DepartmentStartLimitDto? Data)> UpdateDepartmentStartLimitsAsync(
+        int departmentId, int mealStartLimit, int comfortStartLimit, string? userId)
+    {
+        if (mealStartLimit < BreakStatusCodes.MinStartLimit || mealStartLimit > BreakStatusCodes.MaxStartLimit)
+            return (false, $"Meal break start limit must be between {BreakStatusCodes.MinStartLimit} and {BreakStatusCodes.MaxStartLimit} times per shift.", null);
+
+        if (comfortStartLimit < BreakStatusCodes.MinStartLimit || comfortStartLimit > BreakStatusCodes.MaxStartLimit)
+            return (false, $"Comfort break start limit must be between {BreakStatusCodes.MinStartLimit} and {BreakStatusCodes.MaxStartLimit} times per shift.", null);
+
+        var department = await _db.Departments.FirstOrDefaultAsync(d => d.Id == departmentId);
+        if (department is null) return (false, "Department not found.", null);
+        if (department.IsDeleted) return (false, "This department is deleted. Recover it before editing start limits.", null);
+
+        department.MealBreakStartLimit = mealStartLimit;
+        department.ComfortBreakStartLimit = comfortStartLimit;
+        department.UpdatedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync();
+        await _audit.LogAsync(userId, "Update", "DepartmentStartLimits", department.Id.ToString(),
+            $"Updated start limits for '{department.Name}': Meal {mealStartLimit}, Comfort {comfortStartLimit}.");
+
+        return (true, null, new DepartmentStartLimitDto(
+            department.Id,
+            department.Name,
+            department.IsDeleted,
+            await _db.Employees.CountAsync(e => e.DepartmentId == department.Id && !e.IsDeleted),
+            department.MealBreakStartLimit,
+            department.ComfortBreakStartLimit));
+    }
+
+    public async Task<int> GetMealStartLimitForDepartmentAsync(int departmentId)
+    {
+        var fallback = await GetMealStartLimitAsync();
+        var value = await _db.Departments.AsNoTracking()
+            .Where(d => d.Id == departmentId)
+            .Select(d => (int?)d.MealBreakStartLimit)
+            .FirstOrDefaultAsync();
+
+        return value is null ? fallback : ClampStartLimit(value.Value, fallback);
+    }
+
+    public async Task<int> GetComfortStartLimitForDepartmentAsync(int departmentId)
+    {
+        var fallback = await GetComfortStartLimitAsync();
+        var value = await _db.Departments.AsNoTracking()
+            .Where(d => d.Id == departmentId)
+            .Select(d => (int?)d.ComfortBreakStartLimit)
+            .FirstOrDefaultAsync();
+
+        return value is null ? fallback : ClampStartLimit(value.Value, fallback);
+    }
+
+    public async Task<IReadOnlyDictionary<int, (int Meal, int Comfort)>> GetStartLimitsByDepartmentAsync()
+    {
+        var mealDefault = await GetMealStartLimitAsync();
+        var comfortDefault = await GetComfortStartLimitAsync();
+        var rows = await _db.Departments.AsNoTracking()
+            .Select(d => new { d.Id, d.MealBreakStartLimit, d.ComfortBreakStartLimit })
+            .ToListAsync();
+
+        return rows.ToDictionary(
+            d => d.Id,
+            d => (
+                Meal: ClampStartLimit(d.MealBreakStartLimit, mealDefault),
+                Comfort: ClampStartLimit(d.ComfortBreakStartLimit, comfortDefault)));
+    }
+
     private async Task<int> GetStartLimitAsync(string key, int fallback)
     {
         var value = await _db.SystemSettings.AsNoTracking()
@@ -241,4 +346,9 @@ public class SettingsService : ISettingsService
 
         return Math.Clamp(starts, BreakStatusCodes.MinStartLimit, BreakStatusCodes.MaxStartLimit);
     }
+
+    private static int ClampStartLimit(int value, int fallback)
+        => value < BreakStatusCodes.MinStartLimit || value > BreakStatusCodes.MaxStartLimit
+            ? fallback
+            : value;
 }

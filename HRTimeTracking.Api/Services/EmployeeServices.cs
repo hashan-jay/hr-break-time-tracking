@@ -19,11 +19,13 @@ public class DepartmentService : IDepartmentService
 {
     private readonly AppDbContext _db;
     private readonly IAuditService _audit;
+    private readonly ISettingsService _settings;
 
-    public DepartmentService(AppDbContext db, IAuditService audit)
+    public DepartmentService(AppDbContext db, IAuditService audit, ISettingsService settings)
     {
         _db = db;
         _audit = audit;
+        _settings = settings;
     }
 
     public async Task<IReadOnlyList<DepartmentDto>> GetAllAsync(bool includeDeleted = false, string? search = null)
@@ -46,7 +48,9 @@ public class DepartmentService : IDepartmentService
                 d.IsDeleted,
                 d.DeletedAt,
                 d.Employees.Count(e => !e.IsDeleted),
-                d.CreatedAt))
+                d.CreatedAt,
+                d.MealBreakStartLimit,
+                d.ComfortBreakStartLimit))
             .ToListAsync();
     }
 
@@ -61,7 +65,9 @@ public class DepartmentService : IDepartmentService
                 d.IsDeleted,
                 d.DeletedAt,
                 d.Employees.Count(e => !e.IsDeleted),
-                d.CreatedAt))
+                d.CreatedAt,
+                d.MealBreakStartLimit,
+                d.ComfortBreakStartLimit))
             .FirstOrDefaultAsync();
     }
 
@@ -75,7 +81,9 @@ public class DepartmentService : IDepartmentService
         {
             Name = name,
             Description = request.Description?.Trim(),
-            CreatedAt = DateTime.UtcNow
+            CreatedAt = DateTime.UtcNow,
+            MealBreakStartLimit = await _settings.GetMealStartLimitAsync(),
+            ComfortBreakStartLimit = await _settings.GetComfortStartLimitAsync()
         };
         _db.Departments.Add(entity);
         await _db.SaveChangesAsync();

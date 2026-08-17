@@ -106,8 +106,8 @@ export default function ReportsPage() {
     if (!report?.rows?.length) return;
     const header = [
       'Period', 'Code', 'Employee', 'Department', 'Shift',
-      'MealTotal', 'MealSeconds', 'MealStatus', 'MealBreaks',
-      'ComfortTotal', 'ComfortSeconds', 'ComfortStatus', 'ComfortBreaks',
+      'MealTotal', 'MealSeconds', 'MealStatus',
+      'ComfortTotal', 'ComfortSeconds', 'ComfortStatus',
     ];
     const lines = report.rows.map((r) => [
       `"${r.periodLabel || r.date || ''}"`,
@@ -118,11 +118,9 @@ export default function ReportsPage() {
       r.mealBreakDisplay,
       r.mealBreakSeconds,
       `"${r.mealStatus}"`,
-      r.mealBreakCount,
       r.comfortBreakDisplay,
       r.comfortBreakSeconds,
       `"${r.comfortStatus}"`,
-      r.comfortBreakCount,
     ].join(','));
     const blob = new Blob([[header.join(','), ...lines].join('\n')], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
@@ -240,8 +238,8 @@ export default function ReportsPage() {
       {report && (
         <>
           <p className="hint no-print">
-            Limits — Meal: <strong>{report.mealLimitMinutes} min</strong> ({report.mealStartLimit ?? 1} starts)
-            {' · '}Comfort: <strong>{report.comfortLimitMinutes} min</strong> ({report.comfortStartLimit ?? 2} starts)
+            Limits — Meal: <strong>{report.mealLimitMinutes} min</strong>
+            {' · '}Comfort: <strong>{report.comfortLimitMinutes} min</strong>
             {(report.shiftDisplay || report.shiftName) ? (
               <> · Shift: <strong>{report.shiftDisplay || report.shiftName}</strong></>
             ) : null}

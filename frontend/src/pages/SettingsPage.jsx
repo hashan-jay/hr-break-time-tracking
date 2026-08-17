@@ -32,12 +32,19 @@ function SettingRow({ setting, min, max, onChange, onSave }) {
 
 export default function SettingsPage() {
   const [settings, setSettings] = useState([]);
+  const [deptLimits, setDeptLimits] = useState([]);
+  const [savingDeptId, setSavingDeptId] = useState(null);
+  const [savingAll, setSavingAll] = useState(false);
   const [message, setMessage] = useState('');
   const [msgType, setMsgType] = useState('info');
 
   const load = async () => {
-    const { data } = await api.get('/settings');
-    setSettings(data);
+    const [settingsRes, deptRes] = await Promise.all([
+      api.get('/settings'),
+      api.get('/settings/department-start-limits'),
+    ]);
+    setSettings(settingsRes.data);
+    setDeptLimits(deptRes.data);
   };
 
   useEffect(() => {
@@ -61,6 +68,54 @@ export default function SettingsPage() {
 
   const updateLocal = (id, value) => {
     setSettings((prev) => prev.map((x) => (x.id === id ? { ...x, value } : x)));
+  };
+
+  const updateDeptLocal = (departmentId, field, value) => {
+    setDeptLimits((prev) => prev.map((row) => (
+      row.departmentId === departmentId ? { ...row, [field]: value } : row
+    )));
+  };
+
+  const saveDept = async (row) => {
+    setSavingDeptId(row.departmentId);
+    try {
+      const { data } = await api.put(`/settings/department-start-limits/${row.departmentId}`, {
+        mealStartLimit: Number(row.mealStartLimit),
+        comfortStartLimit: Number(row.comfortStartLimit),
+      });
+      setDeptLimits((prev) => prev.map((x) => (x.departmentId === data.departmentId ? data : x)));
+      setMsgType('success');
+      setMessage(`Start limits saved for ${data.departmentName}.`);
+    } catch (err) {
+      setMsgType('error');
+      setMessage(err.response?.data?.message || 'Could not save department start limits.');
+    } finally {
+      setSavingDeptId(null);
+    }
+  };
+
+  const saveAllDepartments = async () => {
+    if (deptLimits.length === 0) return;
+    setSavingAll(true);
+    try {
+      const updated = [];
+      for (const row of deptLimits) {
+        const { data } = await api.put(`/settings/department-start-limits/${row.departmentId}`, {
+          mealStartLimit: Number(row.mealStartLimit),
+          comfortStartLimit: Number(row.comfortStartLimit),
+        });
+        updated.push(data);
+      }
+      setDeptLimits(updated);
+      setMsgType('success');
+      setMessage('Start limits saved for all departments.');
+    } catch (err) {
+      setMsgType('error');
+      setMessage(err.response?.data?.message || 'Could not save all department start limits.');
+      await load();
+    } finally {
+      setSavingAll(false);
+    }
   };
 
   const duration = settings.filter((s) => DURATION_KEYS.includes(s.key));
@@ -90,11 +145,88 @@ export default function SettingsPage() {
       </section>
 
       <section className="settings-list">
-        <h2 className="settings-section-title">Break start limits</h2>
+        <h2 className="settings-section-title">Break start limits by department</h2>
         <p className="hint">
-          How many times each employee may start that break during one shift. When starts used
-          equals this number, they cannot start another break of that type until the next shift.
-          Ending an open break is still allowed. Defaults: Meal 1, Comfort 2. Range 1–20.
+          Each department has its own Meal and Comfort start counts per shift. Example: IT Meal 10
+          means IT employees can start a meal break 10 times this shift; Finance Meal 2 means
+          Finance employees can start it only twice. After the limit is reached they cannot start
+          that break again until the next shift. Ending an open break is still allowed. Range 1–20.
+        </p>
+        <div className="settings-dept-toolbar">
+          <button
+            type="button"
+            className="btn btn-primary"
+            disabled={savingAll || deptLimits.length === 0}
+            onClick={saveAllDepartments}
+          >
+            {savingAll ? 'Saving…' : 'Save all departments'}
+          </button>
+        </div>
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Department</th>
+                <th>Employees</th>
+                <th>Meal starts / shift</th>
+                <th>Comfort starts / shift</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {deptLimits.map((row) => (
+                <tr key={row.departmentId}>
+                  <td className="col-name">{row.departmentName}</td>
+                  <td>{row.employeeCount}</td>
+                  <td>
+                    <input
+                      className="dept-limit-input"
+                      type="number"
+                      min={1}
+                      max={20}
+                      value={row.mealStartLimit}
+                      onChange={(e) => updateDeptLocal(row.departmentId, 'mealStartLimit', e.target.value)}
+                      aria-label={`${row.departmentName} meal start limit`}
+                    />
+                  </td>
+                  <td>
+                    <input
+                      className="dept-limit-input"
+                      type="number"
+                      min={1}
+                      max={20}
+                      value={row.comfortStartLimit}
+                      onChange={(e) => updateDeptLocal(row.departmentId, 'comfortStartLimit', e.target.value)}
+                      aria-label={`${row.departmentName} comfort start limit`}
+                    />
+                  </td>
+                  <td>
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      disabled={savingDeptId === row.departmentId || savingAll}
+                      onClick={() => saveDept(row)}
+                    >
+                      {savingDeptId === row.departmentId ? 'Saving…' : 'Save'}
+                    </button>
+                  </td>
+                </tr>
+              ))}
+              {deptLimits.length === 0 && (
+                <tr>
+                  <td colSpan={5}>No departments found. Create departments first, then set start limits here.</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section className="settings-list">
+        <h2 className="settings-section-title">Default start limits for new departments</h2>
+        <p className="hint">
+          Used only when a new department is created. Existing departments keep the values in the
+          table above until you change them.
         </p>
         {starts.map((s) => (
           <SettingRow key={s.id} setting={s} min={1} max={20} onChange={updateLocal} onSave={save} />
