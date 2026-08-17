@@ -77,6 +77,7 @@ const ICONS = {
 
 function roleLabel(roles = []) {
   if (roles.includes('Developer')) return 'System Developer';
+  if (roles.includes('SystemAdministration')) return 'System Administration';
   if (roles.includes('HRManager')) return 'HR Manager';
   if (roles.includes('HRAssistant')) return 'HR Assistant';
   return roles.join(', ') || 'Staff';

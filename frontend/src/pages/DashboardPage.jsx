@@ -81,6 +81,13 @@ function welcomeCopy(auth) {
       subtitle: 'Monitor break compliance, manage master data, and review system settings.',
     };
   }
+  if (auth.isSystemAdministration) {
+    return {
+      eyebrow: 'Dashboard',
+      title: 'System Administration overview',
+      subtitle: 'Review the dashboard and the system sections granted to this RBAC category.',
+    };
+  }
   if (auth.isHRManager) {
     return {
       eyebrow: 'Dashboard',
@@ -103,7 +110,7 @@ export default function DashboardPage() {
   const [message, setMessage] = useState('');
   const copy = useMemo(
     () => welcomeCopy(auth),
-    [auth.isDeveloper, auth.isHRManager, auth.isHRAssistant],
+    [auth.isDeveloper, auth.isSystemAdministration, auth.isHRManager, auth.isHRAssistant],
   );
 
   useEffect(() => {

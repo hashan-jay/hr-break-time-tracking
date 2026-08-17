@@ -42,14 +42,6 @@ public class PermissionService : IPermissionService
         if (roles.Contains(AppRoles.Developer))
             return AppSections.All;
 
-        var assigned = await _db.UserPermissions.AsNoTracking()
-            .Where(p => p.UserId == userId)
-            .Select(p => p.SectionKey)
-            .ToListAsync();
-
-        if (assigned.Count > 0)
-            return Normalize(assigned);
-
         var role = roles.FirstOrDefault() ?? AppRoles.HRAssistant;
         return await GetRoleSectionsAsync(role);
     }
@@ -60,13 +52,10 @@ public class PermissionService : IPermissionService
         var result = new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal);
         if (ids.Count == 0) return result;
 
-        var users = await _userManager.Users.Where(u => ids.Contains(u.Id)).ToListAsync();
-        var stored = await _db.UserPermissions.AsNoTracking()
-            .Where(p => ids.Contains(p.UserId))
-            .ToListAsync();
-        var byUser = stored.GroupBy(p => p.UserId)
-            .ToDictionary(g => g.Key, g => g.Select(x => x.SectionKey).ToList(), StringComparer.Ordinal);
+        var roleSections = (await GetRoleDefaultsAsync())
+            .ToDictionary(r => r.Role, r => r.Sections, StringComparer.OrdinalIgnoreCase);
 
+        var users = await _userManager.Users.Where(u => ids.Contains(u.Id)).ToListAsync();
         foreach (var user in users)
         {
             var roles = await _userManager.GetRolesAsync(user);
@@ -76,14 +65,10 @@ public class PermissionService : IPermissionService
                 continue;
             }
 
-            if (byUser.TryGetValue(user.Id, out var assigned) && assigned.Count > 0)
-            {
-                result[user.Id] = Normalize(assigned);
-                continue;
-            }
-
             var role = roles.FirstOrDefault() ?? AppRoles.HRAssistant;
-            result[user.Id] = await GetRoleSectionsAsync(role);
+            result[user.Id] = roleSections.TryGetValue(role, out var sections)
+                ? sections
+                : AppSections.DefaultsFor(role);
         }
 
         return result;
@@ -112,7 +97,7 @@ public class PermissionService : IPermissionService
                 : byRole.TryGetValue(role, out var keys)
                     ? Normalize(keys)
                     : AppSections.DefaultsFor(role);
-            return new RoleAccessDto(role, RoleLabel(role), sections, locked);
+            return new RoleAccessDto(role, AppRoles.Label(role), sections, locked);
         }).ToList();
     }
 
@@ -136,7 +121,7 @@ public class PermissionService : IPermissionService
         await _audit.LogAsync(actorUserId, "Update", "RolePermission", roleName,
             $"Updated default section access for {roleName}: {string.Join(", ", cleaned)}.");
 
-        return (true, null, new RoleAccessDto(roleName, RoleLabel(roleName), cleaned, false));
+        return (true, null, new RoleAccessDto(roleName, AppRoles.Label(roleName), cleaned, false));
     }
 
     public async Task<(bool Ok, string? Error, IReadOnlyList<string>? Data)> UpdateUserPermissionsAsync(
@@ -197,17 +182,6 @@ public class PermissionService : IPermissionService
             }));
             await _db.SaveChangesAsync();
         }
-
-        var users = await _userManager.Users.ToListAsync();
-        foreach (var user in users)
-        {
-            if (await _db.UserPermissions.AnyAsync(p => p.UserId == user.Id))
-                continue;
-
-            var roles = await _userManager.GetRolesAsync(user);
-            var role = roles.FirstOrDefault() ?? AppRoles.HRAssistant;
-            await ApplyRoleDefaultsToUserAsync(user.Id, role);
-        }
     }
 
     private async Task<IReadOnlyList<string>> GetRoleSectionsAsync(string role)
@@ -230,12 +204,4 @@ public class PermissionService : IPermissionService
             StringComparer.OrdinalIgnoreCase);
         return AppSections.Grantable.Where(set.Contains).ToList();
     }
-
-    private static string RoleLabel(string role) => role switch
-    {
-        AppRoles.Developer => "Developer",
-        AppRoles.HRManager => "HR Manager",
-        AppRoles.HRAssistant => "HR Assistant",
-        _ => role
-    };
 }

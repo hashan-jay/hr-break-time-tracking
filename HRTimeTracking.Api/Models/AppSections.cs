@@ -24,7 +24,7 @@ public static class AppSections
         (Audit, "Audit Log")
     ];
 
-    /// <summary>Sections a Developer may grant to HR Manager / HR Assistant users.</summary>
+    /// <summary>Sections a Developer may grant to configurable RBAC categories.</summary>
     public static readonly string[] Grantable = Catalog.Select(x => x.Key).ToArray();
 
     public static readonly string[] All = [..Grantable, Users];
@@ -36,6 +36,7 @@ public static class AppSections
         => role switch
         {
             AppRoles.Developer => All,
+            AppRoles.SystemAdministration => [Dashboard, Settings, Audit],
             AppRoles.HRManager => [Dashboard, Tracking, Employees, Departments, Shifts, Reports],
             AppRoles.HRAssistant => [Dashboard, Tracking, Employees, Reports],
             _ => [Dashboard]

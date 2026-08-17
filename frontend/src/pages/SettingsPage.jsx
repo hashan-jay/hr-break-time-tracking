@@ -127,7 +127,7 @@ export default function SettingsPage() {
       <header className="page-header">
         <div>
           <h1>System Settings</h1>
-          <p>Developer-only limits for Meal Break and Comfort Break duration and start counts.</p>
+          <p>Limits for Meal Break and Comfort Break duration and start counts.</p>
         </div>
       </header>
 

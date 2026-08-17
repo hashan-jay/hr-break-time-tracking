@@ -1,7 +1,7 @@
-import { useEffect, useState, Fragment } from 'react';
+import { useEffect, useState } from 'react';
 import api from '../api/client';
 import { MessageBar } from '../components/UiBits';
-import { SECTIONS } from '../auth/AuthContext';
+import { RBAC_CATEGORIES, SECTIONS } from '../auth/AuthContext';
 
 const emptyForm = {
   userName: '',
@@ -40,7 +40,6 @@ export default function UsersPage() {
   const [message, setMessage] = useState('');
   const [msgType, setMsgType] = useState('info');
   const [savingRole, setSavingRole] = useState('');
-  const [savingUserId, setSavingUserId] = useState('');
 
   const load = async () => {
     const [usersRes, rolesRes] = await Promise.all([
@@ -63,7 +62,7 @@ export default function UsersPage() {
     try {
       await api.post('/users', form);
       setMsgType('success');
-      setMessage('User created with that role’s default section access.');
+      setMessage('User created. Section access follows the assigned RBAC category.');
       setForm(emptyForm);
       await load();
     } catch (err) {
@@ -81,7 +80,7 @@ export default function UsersPage() {
         isActive: user.isActive,
       });
       setMsgType('success');
-      setMessage('Role updated. Section access was reset to that role’s defaults.');
+      setMessage('RBAC category updated. Section access now follows that category.');
       await load();
     } catch (err) {
       setMsgType('error');
@@ -131,7 +130,7 @@ export default function UsersPage() {
       });
       setRoleDefaults((prev) => prev.map((x) => (x.role === data.role ? data : x)));
       setMsgType('success');
-      setMessage(`Default access saved for ${data.roleLabel}. New users with this role will get these sections.`);
+      setMessage(`Access saved for ${data.roleLabel}. All accounts in this category use these sections.`);
     } catch (err) {
       setMsgType('error');
       setMessage(err.response?.data?.message || 'Could not save role access.');
@@ -140,41 +139,14 @@ export default function UsersPage() {
     }
   };
 
-  const updateUserLocal = (userId, key) => {
-    setUsers((prev) => prev.map((u) => (
-      u.id === userId
-        ? { ...u, permissions: toggleValue(u.permissions || [], key) }
-        : u
-    )));
-  };
-
-  const saveUserAccess = async (user) => {
-    setSavingUserId(user.id);
-    try {
-      const { data } = await api.put(`/users/${user.id}/permissions`, {
-        sections: user.permissions || [],
-      });
-      setUsers((prev) => prev.map((u) => (u.id === user.id ? { ...u, permissions: data } : u)));
-      setMsgType('success');
-      setMessage(`Section access saved for ${user.fullName}.`);
-    } catch (err) {
-      setMsgType('error');
-      setMessage(err.response?.data?.message || 'Could not save user access.');
-    } finally {
-      setSavingUserId('');
-    }
-  };
-
-  const isDeveloperUser = (user) => (user.roles || []).includes('Developer');
-
   return (
     <div className="page">
       <header className="page-header">
         <div>
           <h1>Users &amp; RBAC</h1>
           <p>
-            Assign each user a role, then tick the staff sections they may open.
-            Developer accounts always keep full access. Users administration stays Developer-only.
+            Create accounts and assign an RBAC category. Section access is decided only by that
+            category. Developer accounts always keep full access. Users administration stays Developer-only.
           </p>
         </div>
       </header>
@@ -184,8 +156,8 @@ export default function UsersPage() {
       <section className="settings-list perm-panel">
         <h2 className="settings-section-title">Default access by role</h2>
         <p className="hint">
-          These defaults are copied when you create a user or change a user’s role.
-          You can then tick different sections for that person below.
+          These defaults apply to every account in that RBAC category. Changing a category updates
+          access for all of its users. Tick different sections for each category, then save.
         </p>
         {roleDefaults.map((row) => (
           <div className="perm-role-row" key={row.role}>
@@ -220,11 +192,11 @@ export default function UsersPage() {
           <label>Email<input required type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></label>
           <label>Password<input required type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} /></label>
           <label>
-            Role
+            RBAC category
             <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
-              <option value="Developer">Developer</option>
-              <option value="HRManager">HR Manager</option>
-              <option value="HRAssistant">HR Assistant</option>
+              {RBAC_CATEGORIES.map((role) => (
+                <option key={role.value} value={role.value}>{role.label}</option>
+              ))}
             </select>
           </label>
           <button className="btn btn-primary" type="submit">Create</button>
@@ -236,61 +208,37 @@ export default function UsersPage() {
               <tr>
                 <th>User</th>
                 <th>Email</th>
-                <th>Role</th>
+                <th>RBAC category</th>
                 <th>Active</th>
                 <th />
               </tr>
             </thead>
             <tbody>
               {users.map((u) => (
-                <Fragment key={u.id}>
-                  <tr>
-                    <td>
-                      <strong>{u.fullName}</strong>
-                      <div className="muted">{u.userName}</div>
-                    </td>
-                    <td>{u.email}</td>
-                    <td>
-                      <select
-                        value={u.roles?.[0] || 'HRAssistant'}
-                        onChange={(e) => changeRole(u, e.target.value)}
-                      >
-                        <option value="Developer">Developer</option>
-                        <option value="HRManager">HR Manager</option>
-                        <option value="HRAssistant">HR Assistant</option>
-                      </select>
-                    </td>
-                    <td>{u.isActive ? 'Yes' : 'No'}</td>
-                    <td className="row-actions">
-                      <button type="button" className="btn link-btn" onClick={() => resetPassword(u.id)}>Password</button>
-                      {u.isActive && (
-                        <button type="button" className="btn link-btn danger" onClick={() => deactivate(u.id)}>Deactivate</button>
-                      )}
-                    </td>
-                  </tr>
-                  <tr className="perm-user-row">
-                    <td colSpan={5}>
-                      <div className="perm-user-access">
-                        <strong>Section access</strong>
-                        <SectionChecks
-                          values={isDeveloperUser(u) ? SECTIONS.map((s) => s.key) : (u.permissions || [])}
-                          disabled={isDeveloperUser(u)}
-                          onToggle={(key) => updateUserLocal(u.id, key)}
-                        />
-                        {!isDeveloperUser(u) && (
-                          <button
-                            type="button"
-                            className="btn btn-primary"
-                            disabled={savingUserId === u.id}
-                            onClick={() => saveUserAccess(u)}
-                          >
-                            {savingUserId === u.id ? 'Saving…' : 'Save access'}
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                </Fragment>
+                <tr key={u.id}>
+                  <td>
+                    <strong>{u.fullName}</strong>
+                    <div className="muted">{u.userName}</div>
+                  </td>
+                  <td>{u.email}</td>
+                  <td>
+                    <select
+                      value={u.roles?.[0] || 'HRAssistant'}
+                      onChange={(e) => changeRole(u, e.target.value)}
+                    >
+                      {RBAC_CATEGORIES.map((role) => (
+                        <option key={role.value} value={role.value}>{role.label}</option>
+                      ))}
+                    </select>
+                  </td>
+                  <td>{u.isActive ? 'Yes' : 'No'}</td>
+                  <td className="row-actions">
+                    <button type="button" className="btn link-btn" onClick={() => resetPassword(u.id)}>Password</button>
+                    {u.isActive && (
+                      <button type="button" className="btn link-btn danger" onClick={() => deactivate(u.id)}>Deactivate</button>
+                    )}
+                  </td>
+                </tr>
               ))}
             </tbody>
           </table>

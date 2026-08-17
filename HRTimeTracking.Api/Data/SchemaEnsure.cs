@@ -197,5 +197,30 @@ public static class SchemaEnsure
                 FOREIGN KEY (UserId) REFERENCES dbo.AspNetUsers (Id) ON DELETE CASCADE;
             END
             """);
+
+        await db.Database.ExecuteSqlRawAsync("""
+            IF OBJECT_ID(N'dbo.AspNetRoles', N'U') IS NOT NULL
+               AND NOT EXISTS (SELECT 1 FROM dbo.AspNetRoles WHERE NormalizedName = N'SYSTEMADMINISTRATION')
+            BEGIN
+                INSERT INTO dbo.AspNetRoles (Id, Name, NormalizedName, ConcurrencyStamp)
+                VALUES (
+                    CONVERT(nvarchar(450), NEWID()),
+                    N'SystemAdministration',
+                    N'SYSTEMADMINISTRATION',
+                    CONVERT(nvarchar(450), NEWID())
+                );
+            END
+            """);
+
+        await db.Database.ExecuteSqlRawAsync("""
+            IF OBJECT_ID(N'dbo.RolePermissions', N'U') IS NOT NULL
+               AND NOT EXISTS (SELECT 1 FROM dbo.RolePermissions WHERE RoleName = N'SystemAdministration')
+            BEGIN
+                INSERT INTO dbo.RolePermissions (RoleName, SectionKey) VALUES
+                    (N'SystemAdministration', N'dashboard'),
+                    (N'SystemAdministration', N'settings'),
+                    (N'SystemAdministration', N'audit');
+            END
+            """);
     }
 }

@@ -14,6 +14,13 @@ export const SECTIONS = [
   { key: 'audit', label: 'Audit Log' },
 ];
 
+export const RBAC_CATEGORIES = [
+  { value: 'Developer', label: 'Developer' },
+  { value: 'SystemAdministration', label: 'System Administration' },
+  { value: 'HRManager', label: 'HR Manager' },
+  { value: 'HRAssistant', label: 'HR Assistant' },
+];
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(() => {
     const raw = localStorage.getItem('hr_user');
@@ -107,6 +114,7 @@ export function AuthProvider({ children }) {
       firstAllowedPath,
       isAuthenticated: !!token && !!user,
       isDeveloper,
+      isSystemAdministration: roles.includes('SystemAdministration'),
       isHRManager: roles.includes('HRManager'),
       isHRAssistant: roles.includes('HRAssistant'),
       canManageMasterData: can('employees') || can('departments') || can('shifts'),
